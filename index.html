@@ -27,6 +27,10 @@
         <div class="clock-wrap"><div class="clock" id="clock"><div class="clock-center"><small>BUGÜN</small><strong>24</strong><small>SAAT</small></div></div></div>
         <div class="legend" id="homeLegend"></div>
       </div>
+      <div class="live-session" id="liveSession" hidden>
+        <div><span class="live-dot"></span><small>ŞU ANDA DEVAM EDİYOR</small><b id="liveTaskName">Çalışma oturumu</b><strong id="liveElapsed">00:00:00</strong><p id="liveContextLabel">Ana etkinlik sürüyor</p></div>
+        <div class="live-actions"><button id="phoneStart" class="secondary-btn">＋ Telefon / mola</button><button id="sessionStop" class="primary-btn">Bitir</button></div>
+      </div>
       <div class="summary-grid">
         <article class="mini-card"><span class="mini-icon">✦</span><small>Kayıtlı zaman</small><b id="loggedTime">0 sa 0 dk</b></article>
         <article class="mini-card"><span class="mini-icon">♡</span><small>Etkinlik sayısı</small><b id="activityCount">0</b></article>
@@ -52,11 +56,13 @@
       <div class="journal-tools">
         <label class="tool-btn">▧ Fotoğraf<input type="file" id="photoInput" accept="image/*" hidden></label>
         <button class="tool-btn" id="addText">T Metin</button><button class="tool-btn" id="drawToggle">✎ El yazısı</button>
-        <button class="tool-btn" id="stickerToggle">✧ Çıkartma</button>
+        <button class="tool-btn" id="stickerToggle">✧ Çıkartma</button><button class="tool-btn" id="decorToggle">⌗ Çizgi / nokta</button>
       </div>
       <div class="sticker-tray" id="stickerTray" hidden>
         <button data-sticker="⌛">⌛</button><button data-sticker="💎">💎</button><button data-sticker="💗">💗</button><button data-sticker="🌙">🌙</button><button data-sticker="🪄">🪄</button><button data-sticker="🧁">🧁</button><button data-sticker="🦋">🦋</button><button data-sticker="⭐">⭐</button><button data-sticker="🐚">🐚</button>
       </div>
+      <div class="decor-tray" id="decorTray" hidden><button data-decor="line">Uzun çizgi</button><button data-decor="dots">Noktalar</button><button data-decor="star">Yıldız</button><button data-decor="tape">Şerit</button></div>
+      <div class="object-toolbar" id="objectToolbar" hidden><span id="selectedLabel">Nesne seçildi</span><button id="objectSmaller">−</button><button id="objectBigger">＋</button><button id="objectRotate">↻</button><button id="objectEdit">Düzenle</button><button id="objectDelete">Sil</button></div>
       <div class="washi-tray"><span>WASHI</span><button class="washi pink" data-washi="pink"></button><button class="washi lilac" data-washi="lilac"></button><button class="washi gold" data-washi="gold"></button><button class="washi mint" data-washi="mint"></button></div>
       <div class="paper-stack">
         <div class="paper" id="paper">
@@ -64,7 +70,7 @@
           <div class="paper-content" id="paperContent">
             <textarea id="journalNote" placeholder="Bugün neler oldu? Aklından neler geçti? Buraya yaz..."></textarea>
             <div id="canvasItems"></div>
-            <canvas id="drawCanvas"></canvas>
+            <svg id="drawSvg" aria-label="El yazısı çizim alanı"></svg>
           </div>
           <div class="paper-footer">Bugünden sana kalan küçük bir anı ♡</div>
         </div>
@@ -79,6 +85,7 @@
       <div class="analysis-total"><small>SEÇİLİ DÖNEMDE KAYITLI ZAMAN</small><strong id="analysisTotal">0 sa 0 dk</strong><div class="bar" id="analysisBar"></div></div>
       <div class="section-title"><div><h2>Zamanın nereye gidiyor?</h2><p class="muted">Kayıtlarına göre kategori dağılımı</p></div></div>
       <div id="categoryBreakdown" class="breakdown"></div>
+      <div class="section-title"><div><h2>Paralel telefon / uygulama kullanımı</h2><p class="muted">Çalışma oturumlarınla çakışan kullanım kayıtları</p></div></div><div id="contextBreakdown" class="breakdown"></div>
       <div class="insight-card"><span>✧</span><div><b>Minik içgörü</b><p id="insightText">Kayıt ekledikçe zaman örüntülerin burada görünür.</p></div></div>
       <div class="section-title"><div><h2>Rutinlerini keşfet</h2><p class="muted">Tekrarlayan başlangıç saatleri</p></div></div>
       <div id="routineBox" class="routine-box">Henüz yeterli veri yok. Birkaç gün kayıt tuttuktan sonra sabah ve çalışma rutinlerini burada görebileceksin.</div>
@@ -115,10 +122,14 @@
 <div class="modal-backdrop" id="activityModal" hidden>
   <form class="modal" id="activityForm">
     <div class="modal-head"><div><p class="eyebrow">ZAMANINA BİR NOT</p><h2>Etkinlik ekle</h2></div><button type="button" class="close-btn" id="closeModal">×</button></div>
-    <label>Ne yaptın?<input id="activityName" required placeholder="Örn. Python çalıştım"></label>
+    <label>Şu anda ne yapacaksın?<input id="activityName" required placeholder="Örn. LabOS üzerinde çalışacağım"></label>
+    <div class="timer-explainer">Başlat'a bastığında süre gerçek zamanlı ölçülür. Çalışırken telefon kullanımını ayrıca işaretleyebilirsin; ana çalışma oturumu durmaz.</div>
+    <button type="button" class="primary-btn full" id="startTimer">▶ Zamanı şimdi başlat</button>
+    <div class="modal-divider"><span>veya</span></div>
     <div class="form-row"><label>Başlangıç<input type="time" id="startTime" required value="09:00"></label><label>Bitiş<input type="time" id="endTime" required value="10:00"></label></div>
     <label>Kategori<select id="activityCategory"><option>Çalışma</option><option>Öğrenme</option><option>Kişisel</option><option>Sosyal</option><option>Dinlenme</option><option>Uyku</option><option>Ev işleri</option><option>Diğer</option></select></label>
     <label>Not (isteğe bağlı)<textarea id="activityMemo" rows="2" placeholder="Küçük bir ayrıntı..."></textarea></label>
+    <div class="timer-explainer">Geçmişte yaptığın bir etkinliği kaydetmek için aşağıdaki alanları kullan.</div>
     <button class="primary-btn full" type="submit">Kaydı ekle ♡</button>
   </form>
 </div>
