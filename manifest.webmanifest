@@ -1,0 +1,17 @@
+{
+  "name": "Time Garden — Zaman Günlüğüm",
+  "short_name": "Time Garden",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fbf4f8",
+  "theme_color": "#f7eaf2",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
