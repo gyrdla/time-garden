@@ -127,6 +127,10 @@ test('user template from a broken-down task; planner data survives backup import
   assert.equal(back.projects.length, 1);
   assert.equal(back.tasks.length, 3);
   assert.deepEqual(normalizeImport({ app: 'time-garden', schema: 2, sessions: [] }).tasks, []);
+  const img = normalizeImport({ app: 'time-garden', schema: 4, sessions: [], assets: [{ id: 'a', kind: 'sticker', dataUrl: 'data:image/png;base64,AA' }, { id: 'b', kind: 'sticker', dataUrl: 'javascript:1' }, { id: 'c', kind: 'x', dataUrl: 'data:image/png;base64,AA' }] });
+  assert.deepEqual(img.assets.map((a) => a.id), ['a']);
+  assert.equal(P.newProject({ name: 'X', cover: 'preset:zebra' }).cover, 'preset:zebra');
+  assert.equal(P.newProject({ name: 'X', cover: 'url(evil)' }).cover, null);
 });
 
 test('pick for a day without a time, then give it a time', () => {

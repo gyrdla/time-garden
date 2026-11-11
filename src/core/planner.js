@@ -23,9 +23,9 @@ function need(v, what) {
 }
 const minutes = (v) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n > 0 ? Math.min(n, 24 * 60) : null; };
 
-export function newProject({ name, area = '', category = 'Çalışma', note = '' }, now = Date.now()) {
+export function newProject({ name, area = '', category = 'Çalışma', note = '', cover = null }, now = Date.now()) {
   return { id: uid(), name: need(name, 'Proje adı'), area: String(area || '').trim().slice(0, 60) || 'Genel',
-    category: CATEGORIES.includes(category) ? category : 'Diğer', note: String(note || ''), archived: false, createdAt: now, updatedAt: now };
+    category: CATEGORIES.includes(category) ? category : 'Diğer', note: String(note || ''), cover: typeof cover === 'string' && /^(preset|asset):[\w-]+$/.test(cover) ? cover : null, archived: false, createdAt: now, updatedAt: now };
 }
 
 export function newTask({ projectId, parentId = null, title, how = '', estimateMin = null, scheduledAt = null, dependsOn = null, parallel = false, order = 0, plannedDay = null }, now = Date.now()) {

@@ -10,12 +10,11 @@ import { dayRange, isoDate, fromIso, fmtDur, fmtTime, fmtClock, fmtLive, clipAll
 import { periodRange, shiftPeriod } from '../core/analytics.js';
 import { openSheet, closeSheet, run } from './sheets.js';
 import { renderPlanDial } from './dial.js';
+import { fileToImage, makeCover } from './camera.js';
 
 let tab = 'day';
 let dayAnchor = Date.now();
 let openProject = null;
-let projView = 'tree';
-let listView = 'garden';
 const collapsed = new Set();
 
 const AREAS = ['Bilim', 'İçerik', 'Yazılım', 'İş arama', 'Kişisel'];
@@ -342,31 +341,37 @@ function bindPeriod(root, kind) {
 // ── projects ───────────────────────────────────────────────────────────────
 const fmtMin = (m) => (m ? fmtDur(m * MIN) : '—');
 
+export const COVERS = [['pearl', 'Sedef'], ['croc', 'Siyah deri'], ['dalmatian', 'Benekli'], ['zebra', 'Zebra'], ['fawn', 'Ceylan'], ['metal', 'Metal'], ['tiger', 'Kaplan']];
+
+/** CSS for a project's folder: a ready-made folder picture, or the user's own photo cut to a folder shape. */
+function coverStyle(cover) {
+  const [type, id] = String(cover || 'preset:pearl').split(':');
+  const asset = type === 'asset' ? store.getAsset(id) : null;
+  if (asset) return { cls: 'custom', style: `background-image:url(${asset.dataUrl})` };
+  const preset = COVERS.some((c) => c[0] === id) ? id : 'pearl';
+  return { cls: '', style: `background-image:url(assets/folders/${preset}.webp)` };
+}
+
 function projectsView() {
   const { projects, tasks, sessions, events } = store.state;
   const live = projects.filter((p) => !p.archived);
   if (!projects.length) {
-    return `<p class="empty-note" style="margin-bottom:var(--s4)">Her projen burada ayrı bir bahçe. Projeyi ekle, görevlerini yaz, değnekle adımlara böl, sonra günlere ve saatlere yerleştir.</p>
+    return `<p class="empty-note" style="margin-bottom:var(--s4)">Her projen burada ayrı bir klasör. Projeyi ekle, görevlerini yaz, değnekle adımlara böl, sonra günlere ve saatlere yerleştir.</p>
       <button class="btn full" id="addProject">${icon('plus')}İlk projeni ekle</button>`;
   }
-  const toggle = `<div class="segmented slim" id="listView"><button data-v="garden" class="${listView === 'garden' ? 'selected' : ''}">Kartlar</button><button data-v="table" class="${listView === 'table' ? 'selected' : ''}">Tablo</button></div>`;
-  if (listView === 'table') {
-    const rows = live.map((p) => { const pr = P.progress(tasks, p.id), tb = P.projectTable(p.id, tasks, sessions, events), next = P.nextStep(tasks, p.id);
-      return `<tr data-project="${p.id}"><th>${P.stage(pr.pct).icon} ${esc(p.name)}</th><td>${esc(p.area)}</td><td>${pr.done}/${pr.total}</td><td>${fmtMin(tb.estimateMin)}</td><td>${tb.actualMs ? fmtDur(tb.actualMs) : '—'}</td><td>${next ? esc(next.title) : '—'}</td></tr>`; }).join('');
-    return `${toggle}<div class="table-wrap"><table class="ptable"><thead><tr><th>Proje</th><th>Alan</th><th>Adım</th><th>Tahmin</th><th>Ölçülen</th><th>Sıradaki</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <button class="btn ghost full" id="addProject">${icon('plus')}Proje ekle</button>`;
-  }
   const areas = [...new Set(live.map((p) => p.area))];
-  const card = (p) => {
-    const pr = P.progress(tasks, p.id), st = P.stage(pr.pct), next = P.nextStep(tasks, p.id), spent = P.projectActualMs(p.id, tasks, sessions, events);
-    return `<button class="card project" data-project="${p.id}"><div class="card-head"><h2><span class="stage" title="${st.name}">${st.icon}</span>${esc(p.name)}</h2><span class="chip quiet">${st.name}</span></div>
-      <div class="stack"><i style="--c:${catColor(p.category)};width:${Math.round(pr.pct * 100)}%"></i></div>
-      <p>${pr.total ? `${pr.done}/${pr.total} adım` : 'Henüz adım yok'}${spent ? ` · ${fmtDur(spent)} ölçüldü` : ''}${next ? ` · sıradaki: ${esc(next.title)}` : ''}</p></button>`;
+  const folder = (p) => {
+    const pr = P.progress(tasks, p.id), st = P.stage(pr.pct), spent = P.projectActualMs(p.id, tasks, sessions, events), c = coverStyle(p.cover);
+    return `<button class="folder" data-project="${p.id}" aria-label="${esc(p.name)}, ${pr.done}/${pr.total} adım. Kapağı değiştirmek için basılı tut.">
+      <span class="folder-img ${c.cls}" style="${c.style}"></span>
+      <b>${esc(p.name)}</b><small>${st.icon} ${pr.total ? `${pr.done}/${pr.total} adım` : 'adım yok'}${spent ? ` · ${fmtDur(spent)}` : ''}</small>
+      <span class="folder-bar"><i style="width:${Math.round(pr.pct * 100)}%"></i></span></button>`;
   };
   const archived = projects.filter((p) => p.archived);
-  return `${deerCard(Date.now())}${toggle}${areas.map((a) => `<h2 class="section-h area-h">${esc(a)}</h2>${live.filter((p) => p.area === a).map(card).join('')}`).join('')}
+  return `${deerCard(Date.now())}${areas.map((a) => `<h2 class="section-h area-h">${esc(a)}</h2><div class="folders">${live.filter((p) => p.area === a).map(folder).join('')}</div>`).join('')}
+    <p class="hint">Klasöre dokununca açılır; kapağını değiştirmek için basılı tut.</p>
     <button class="btn ghost full" id="addProject">${icon('plus')}Proje ekle</button>
-    ${archived.length ? `<h2 class="section-h area-h">Arşiv</h2>${archived.map(card).join('')}` : ''}`;
+    ${archived.length ? `<h2 class="section-h area-h">Arşiv</h2><div class="folders">${archived.map(folder).join('')}</div>` : ''}`;
 }
 
 function taskRow(t, depth) {
@@ -386,22 +391,6 @@ function taskRow(t, depth) {
     </li>${isOpen ? kids.map((k) => taskRow(k, depth + 1)).join('') : ''}`;
 }
 
-function tableView(p) {
-  const { tasks, sessions, events } = store.state, tb = P.projectTable(p.id, tasks, sessions, events);
-  if (!tb.rows.length) return '<p class="empty-note">Bu projede henüz görev yok.</p>';
-  const when = (t) => (t.scheduledAt != null ? whenText(t.scheduledAt) : (t.plannedDay ? dayText(t.plannedDay) : '—'));
-  const rows = tb.rows.map((r) => {
-    const hist = !r.task.estimateMin && r.leaf ? P.historyEstimate(r.task.title, sessions, events) : null;
-    const diff = r.estimateMin && r.actualMs ? Math.round(r.actualMs / MIN) - r.estimateMin : null;
-    return `<tr data-task="${r.task.id}" class="${r.done ? 'done' : ''}"><th style="padding-left:${8 + r.depth * 14}px">${r.done ? '✓ ' : ''}${esc(r.task.title)}</th><td>${when(r.task)}</td><td class="how">${esc(r.task.how) || '—'}</td>
-      <td>${r.estimateMin ? fmtMin(r.estimateMin) : (hist ? `≈ ${hist.minutes} dk` : '—')}</td><td>${r.actualMs ? fmtDur(r.actualMs) : '—'}</td><td>${diff == null ? '—' : `${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)} dk`}</td>
-      <td>${r.done ? 'bitti' : r.blocked ? 'bekliyor' : r.task.parallel ? 'aynı anda' : 'açık'}</td></tr>`;
-  }).join('');
-  return `<div class="table-wrap"><table class="ptable"><thead><tr><th>Ne</th><th>Ne zaman</th><th>Nasıl</th><th>Tahmin</th><th>Ölçülen</th><th>Fark</th><th>Durum</th></tr></thead><tbody>${rows}</tbody>
-    <tfoot><tr><th>Toplam</th><td></td><td></td><td>${fmtMin(tb.estimateMin)}</td><td>${tb.actualMs ? fmtDur(tb.actualMs) : '—'}</td><td></td><td></td></tr></tfoot></table></div>
-    <p class="hint left">“≈” işaretli süreler tahmin girmediğin adımlar için geçmiş ölçümlerinden gelir. Satıra dokununca görev açılır.</p>`;
-}
-
 function projectDetail(p, now) {
   const { tasks, sessions, events } = store.state;
   const pr = P.progress(tasks, p.id), st = P.stage(pr.pct), roots = P.childrenOf(tasks, p.id, null);
@@ -410,8 +399,7 @@ function projectDetail(p, now) {
     <section class="card game"><div class="card-head"><h2><span class="stage">${st.icon}</span>${st.name}</h2><span class="chip quiet">${pr.done}/${pr.total} adım</span></div>
       <div class="stack"><i style="--c:${catColor(p.category)};width:${Math.round(pr.pct * 100)}%"></i></div>
       <p>Tahmin ${fmtMin(planned)} · Ölçülen ${spent ? fmtDur(spent) : '—'}</p>${p.note ? `<p>${esc(p.note)}</p>` : ''}</section>
-    <div class="segmented slim" id="projView"><button data-v="tree" class="${projView === 'tree' ? 'selected' : ''}">Adımlar</button><button data-v="table" class="${projView === 'table' ? 'selected' : ''}">Tablo</button></div>
-    ${projView === 'table' ? tableView(p) : `<ul class="tree">${roots.map((t) => taskRow(t, 0)).join('') || '<li class="empty-note">Bu projede henüz görev yok. Aşağıya yaz ya da adımlara böl.</li>'}</ul>`}
+    <ul class="tree">${roots.map((t) => taskRow(t, 0)).join('') || '<li class="empty-note">Bu projede henüz görev yok. Aşağıya yaz ya da adımlara böl.</li>'}</ul>
     <form class="quick-add" id="quickAdd"><input name="title" placeholder="Yeni görev yaz, Enter'a bas" maxlength="160" autocomplete="off" aria-label="Yeni görev"><button class="icon-btn sm" aria-label="Ekle">${icon('plus')}</button></form>
     <button class="btn ghost full" id="projBreak">${icon('spark')}Projeyi adımlara böl</button>`;
 }
@@ -419,14 +407,33 @@ function projectDetail(p, now) {
 function bindProjects(root) {
   const add = $('#addProject', root);
   if (add) add.onclick = () => openProjectSheet();
-  $$('[data-project]', root).forEach((b) => { b.onclick = () => { openProject = b.dataset.project; renderPlan(); window.scrollTo(0, 0); }; });
-  $$('#listView button', root).forEach((b) => { b.onclick = () => { listView = b.dataset.v; renderPlan(); }; });
+  $$('[data-project]', root).forEach((b) => {
+    // Tap opens the project; pressing and holding opens the cover picker instead.
+    let timer = 0, held = false, sx = 0, sy = 0;
+    const cancel = () => clearTimeout(timer);
+    const hold = () => {
+      if (held) return;
+      held = true; cancel(); haptic(18);
+      // The finger is still down: swallow the tap its release would otherwise land on the sheet.
+      const swallow = (e) => { e.stopPropagation(); e.preventDefault(); };
+      const off = () => setTimeout(() => window.removeEventListener('click', swallow, true), 80);
+      window.addEventListener('click', swallow, { capture: true, once: true });
+      window.addEventListener('pointerup', off, { once: true });
+      window.addEventListener('pointercancel', off, { once: true });
+      openCoverSheet(b.dataset.project);
+    };
+    b.addEventListener('pointerdown', (e) => { held = false; sx = e.clientX; sy = e.clientY; cancel(); timer = setTimeout(hold, 450); });
+    b.addEventListener('pointermove', (e) => { if (Math.hypot(e.clientX - sx, e.clientY - sy) > 10) cancel(); });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, cancel);
+    // Some browsers report a long press as a context-menu request instead of letting the timer finish.
+    b.addEventListener('contextmenu', (e) => { e.preventDefault(); hold(); });
+    b.onclick = () => { if (held) { held = false; return; } openProject = b.dataset.project; renderPlan(); window.scrollTo(0, 0); };
+  });
   if (!openProject) return;
   const p = store.getProject(openProject);
   $('#projBack', root).onclick = () => { openProject = null; renderPlan(); };
   $('#projEdit', root).onclick = () => openProjectSheet(p.id);
   $('#projBreak', root).onclick = () => openBreakdown({ projectId: p.id, id: null, title: p.name });
-  $$('#projView button', root).forEach((b) => { b.onclick = () => { projView = b.dataset.v; renderPlan(); }; });
   $('#quickAdd', root).onsubmit = (e) => {
     e.preventDefault();
     const title = e.target.title.value;
@@ -465,6 +472,29 @@ export function bindPlan() {
       tab = b.dataset.tab; renderPlan();
     };
   });
+}
+
+function openCoverSheet(id) {
+  const p = store.getProject(id);
+  if (!p) return;
+  const mine = store.assetsOf('cover');
+  const cur = p.cover || 'preset:pearl';
+  const tile = (value, style, cls, label, del = '') => `<span class="cover-tile"><button class="cover-pick${value === cur ? ' chosen' : ''}" data-cover="${value}" aria-label="${esc(label)}"><span class="folder-img ${cls}" style="${style}"></span><small>${esc(label)}</small></button>${del}</span>`;
+  openSheet(`${p.name} · klasör kapağı`, `<div class="cover-grid">
+      ${COVERS.map(([k, label]) => tile(`preset:${k}`, `background-image:url(assets/folders/${k}.webp)`, '', label)).join('')}
+      ${mine.map((a, i) => tile(`asset:${a.id}`, `background-image:url(${a.dataUrl})`, 'custom', `Benim ${i + 1}`, `<button class="cover-del" data-del="${a.id}" aria-label="Bu görseli sil">×</button>`)).join('')}
+    </div>
+    <div class="sheet-actions"><label class="btn full">Kendi görselimi seç<input type="file" id="coverFile" accept="image/*" hidden></label></div>
+    <p class="hint">Kendi görsellerin yalnızca bu cihazda saklanır.</p>`);
+  $$('[data-cover]', body()).forEach((b) => { b.onclick = () => run(() => store.updateProject(id, { cover: b.dataset.cover }), 'Kapak değişti'); });
+  $$('[data-del]', body()).forEach((b) => { b.onclick = () => act(store.removeAsset(b.dataset.del).then(() => openCoverSheet(id))); });
+  $('#coverFile', body()).onchange = async (e) => {
+    try {
+      const a = await store.addAsset('cover', makeCover(await fileToImage(e.target.files[0])));
+      await store.updateProject(id, { cover: `asset:${a.id}` });
+      closeSheet(); toast('Kapak değişti');
+    } catch (err) { toast(err.message || 'Görsel eklenemedi.'); }
+  };
 }
 
 // ── sheets ─────────────────────────────────────────────────────────────────

@@ -18,7 +18,11 @@ export function openSheet(title, html) {
 }
 
 export function bindSheets() {
-  backdrop().addEventListener('click', (e) => { if (e.target === backdrop()) closeSheet(); });
+  // Close only on a tap that both started and ended on the dimmed area, so releasing a
+  // long press that opened the sheet does not immediately close it again.
+  let downOnBackdrop = false;
+  backdrop().addEventListener('pointerdown', (e) => { downOnBackdrop = e.target === backdrop(); });
+  backdrop().addEventListener('click', (e) => { if (e.target === backdrop() && downOnBackdrop) closeSheet(); downOnBackdrop = false; });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !backdrop().hidden) closeSheet(); });
 }
 

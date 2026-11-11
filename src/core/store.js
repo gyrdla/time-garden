@@ -19,6 +19,7 @@ export const state = {
   tasks: [],
   routines: [],
   routineLog: [],
+  assets: [],
   settings: { theme: 'pearl' },
 };
 
@@ -36,7 +37,7 @@ function write(promise) {
 
 export async function init() {
   try {
-    const [sessions, events, pages, projects, tasks, routines, routineLog, kv] = await Promise.all([
+    const [sessions, events, pages, projects, tasks, routines, routineLog, assets, kv] = await Promise.all([
       ...db.DATA_STORES.map((s) => db.getAll(s)), db.getAll('kv'),
     ]);
     const meta = Object.fromEntries(kv.map((r) => [r.key, r.value]));
@@ -52,7 +53,7 @@ export async function init() {
       load(m);
       log('migrated', m.sessions.length, 'sessions');
     } else {
-      load({ sessions, events, pages, projects, tasks, routines, routineLog, settings: meta.settings || {} });
+      load({ sessions, events, pages, projects, tasks, routines, routineLog, assets, settings: meta.settings || {} });
       if (meta.schema < SCHEMA) await db.put('kv', { key: 'schema', value: SCHEMA });
     }
   } catch (e) {
@@ -75,6 +76,7 @@ function load(d) {
   state.tasks = [...(d.tasks || [])];
   state.routines = [...(d.routines || [])];
   state.routineLog = [...(d.routineLog || [])];
+  state.assets = [...(d.assets || [])].sort((a, b) => a.createdAt - b.createdAt);
   state.settings = { theme: 'pearl', ...(d.settings || {}) };
 }
 
@@ -339,6 +341,26 @@ export function saveTemplate(taskId) {
   return setSetting('templates', [...userTemplates().filter((t) => t.name !== tpl.name), tpl]);
 }
 
+// ── user images (stickers, washi textures, folder covers) ──────────────────
+export const assetsOf = (kind) => state.assets.filter((a) => a.kind === kind);
+export const getAsset = (id) => state.assets.find((a) => a.id === id) || null;
+
+export function addAsset(kind, dataUrl) {
+  if (!['sticker', 'washi', 'cover'].includes(kind) || !/^data:image\//.test(dataUrl || '')) throw new tracker.ValidationError('Görsel okunamadı.');
+  const a = { id: tracker.uid(), kind, dataUrl, createdAt: Date.now() };
+  state.assets.push(a); emit('assets');
+  return write(db.put('assets', a)).then(() => a);
+}
+
+/** Pages that used the image keep their place but lose the picture. */
+export function removeAsset(id) {
+  state.assets = state.assets.filter((a) => a.id !== id);
+  const cleared = state.projects.filter((p) => p.cover === `asset:${id}`).map((p) => ({ ...p, cover: null }));
+  cleared.forEach((p) => { state.projects[state.projects.findIndex((x) => x.id === p.id)] = p; });
+  emit('assets');
+  return write(db.batch([{ store: 'assets', del: id }, ...cleared.map((p) => ({ store: 'projects', put: p }))]));
+}
+
 // ── settings ───────────────────────────────────────────────────────────────
 export function setSetting(key, value) {
   state.settings = { ...state.settings, [key]: value };
@@ -351,7 +373,7 @@ export function exportData() {
   return {
     app: 'time-garden', schema: SCHEMA, exportedAt: new Date().toISOString(),
     sessions: state.sessions, events: state.events, pages: [...state.pages.values()],
-    projects: state.projects, tasks: state.tasks, routines: state.routines, routineLog: state.routineLog, settings: state.settings,
+    projects: state.projects, tasks: state.tasks, routines: state.routines, routineLog: state.routineLog, assets: state.assets, settings: state.settings,
   };
 }
 

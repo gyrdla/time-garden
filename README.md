@@ -1,4 +1,4 @@
-# Time Garden — v2.1
+# Time Garden — v2.4
 
 Mobile-first, local-first time journal PWA. No build step: the repository root is the deployed site.
 
@@ -27,7 +27,7 @@ sw.js                 offline app shell (bump VERSION on each release)
 tests/                node:test unit tests
 ```
 
-## Data model (schema 3, IndexedDB `time-garden`)
+## Data model (schema 4, IndexedDB `time-garden`)
 
 | Store | Key | Record |
 |---|---|---|
@@ -38,6 +38,7 @@ tests/                node:test unit tests
 | `tasks` | `id` | Step in a project tree: `projectId, parentId, title, how, estimateMin, scheduledAt, dependsOn, parallel, done` |
 | `routines` | `id` | Weekly repeating item: `title, days[], time, estimateMin, parallel, active` |
 | `routineLog` | `id` | One completed routine occurrence: `routineId, date` |
+| `assets` | `id` | User-made images: `kind` (`sticker`, `washi`, `cover`), `dataUrl` |
 | `kv` | `key` | `settings`, `schema`, migration markers, pre-import backup |
 
 `source` is `timer` (both ends stamped by the clock) or `manual` (typed or edited by hand).
@@ -74,8 +75,13 @@ Working and tested: timestamp timer with pause/resume, overlapping secondary eve
 and retrospective entry, 24-hour dial, month/week/year calendar, day/week/month/year analysis,
 journal save/autosave, planner (projects, breakdown, chains, routines, day/week agenda), tear-off drag gesture, themes, JSON backup/restore, offline shell.
 
-Not built yet: object canvas for the journal (handles, undo/redo, layers, locking), sticker
-library, background removal, emoji and GIF generation, native Screen Time integration.
+Not built yet: object canvas for the journal (handles, undo/redo, layers, locking), in-app
+background removal, emoji and GIF generation, native Screen Time integration.
+
+Stickers and washi: `src/ui/camera.js` opens a live viewfinder behind one of two frame images
+(`assets/frames/`); what is inside the frame's window is captured. Images that already have a
+transparent background (e.g. a subject lifted in iOS Photos, pasted or imported) are kept as is.
+Journal pages reference library images by id (`data-asset`) and re-attach them on load.
 
 ## iOS Screen Time
 

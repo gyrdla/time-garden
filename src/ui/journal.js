@@ -6,15 +6,15 @@ import { $, $$, esc, toast, haptic, fmtFullDate, fmtMonth } from './dom.js';
 import * as store from '../core/store.js';
 import { dayRange, summarize, fmtDur, fromIso, isoDate } from '../core/time.js';
 import { view } from './nav.js';
+import { openSheet, closeSheet } from './sheets.js';
+import { openCamera, fileToImage, imageFromClipboard, makeSticker, makeWashi } from './camera.js';
 
-const WASHI = {
-  pink: 'repeating-linear-gradient(45deg,#efc5d8 0 5px,#f8e2eb 5px 10px)',
-  lilac: 'repeating-linear-gradient(90deg,#cbbbe7 0 5px,#e5daf3 5px 10px)',
-  gold: 'repeating-linear-gradient(45deg,#e8d2a6 0 5px,#f6e9c9 5px 10px)',
-  mint: 'repeating-linear-gradient(90deg,#b9d6c7 0 5px,#e0eee6 5px 10px)',
-};
+const EMOJI = ['⌛', '💎', '💗', '🌙', '🪄', '🧁', '🦋', '⭐', '🐚'];
+// Ready-made tapes: [css class suffix, label]. The patterns themselves live in journal.css.
+const TAPES = [['hearts', 'Kalpli'], ['pearl', 'Sedef'], ['bows', 'Fiyonk'], ['stars', 'Yıldız'], ['cloud', 'Bulut'], ['gingham', 'Pötikare'], ['floral', 'Çiçek'], ['leaf', 'Yaprak']];
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+let tape = null; // armed washi: { preset } or { asset }
 let selected = null, drawMode = false, drawing = null, drawSvg = null, saveTimer = 0, loadedDate = null;
 const bound = new WeakSet();
 
@@ -33,6 +33,9 @@ function snapshot() {
   const clone = $('#canvasItems').cloneNode(true);
   clone.querySelectorAll('.selected').forEach((n) => n.classList.remove('selected'));
   clone.querySelectorAll('[contenteditable]').forEach((n) => n.removeAttribute('contenteditable'));
+  // Pictures from the library are stored once and re-attached on load, not copied into every page.
+  clone.querySelectorAll('img[data-asset]').forEach((n) => n.removeAttribute('src'));
+  clone.querySelectorAll('.washi-tape[data-asset]').forEach((n) => { n.style.backgroundImage = ''; });
   const draw = drawSvg.cloneNode(true);
   draw.querySelectorAll('.selected').forEach((n) => n.classList.remove('selected'));
   return { note: $('#journalNote').value, items: clone.innerHTML.trim(), draw: draw.innerHTML.trim() };
@@ -61,9 +64,18 @@ export function renderJournal() {
   $('#canvasItems').innerHTML = sanitize(page.items);
   drawSvg.innerHTML = sanitize(page.draw);
   drawSvg.querySelectorAll('path').forEach(bindStroke);
+  hydrate($('#canvasItems'));
   $$('#canvasItems .placed').forEach(enableDrag);
-  select(null);
+  select(null); renderTrays();
   $('#saveState').textContent = '';
+}
+
+function hydrate(root) {
+  root.querySelectorAll('[data-asset]').forEach((n) => {
+    const a = store.getAsset(n.dataset.asset);
+    if (n.tagName === 'IMG') { if (a) n.src = a.dataUrl; else n.remove(); }
+    else if (a) n.style.backgroundImage = `url(${a.dataUrl})`;
+  });
 }
 
 function changeDay(n) {
@@ -93,7 +105,7 @@ function enableDrag(el) {
   bound.add(el);
   let sx, sy, ox, oy, moved = false;
   el.addEventListener('pointerdown', (e) => {
-    if (drawMode || el.isContentEditable) return;
+    if (drawMode || tape || el.isContentEditable) return;
     e.stopPropagation(); select(el);
     const p = el.parentElement.getBoundingClientRect();
     sx = e.clientX; sy = e.clientY; ox = el.offsetLeft; oy = el.offsetTop; moved = false;
@@ -248,49 +260,122 @@ function setupTear() {
   handle.addEventListener('click', () => { if (!dragged) toast('Koparmak için tutup yukarı sürükle'); });
 }
 
-// ── Sticker Atelier (v1 composition; no background removal, emoji or GIF yet) ──
-function setupStudio() {
-  const canvas = $('#stickerCanvas'), ctx = canvas.getContext('2d');
-  const styles = { pink: ['#d88eb6', '#efbfd6'], moon: ['#9588c5', '#c9bde9'], botanical: ['#799c83', '#b9d2bd'], pixel: ['#8175b7', '#bcb4e7'], lilac: ['#a48bc6', '#d3c2e9'] };
-  let image = null, dataUrl = null;
-  const draw = () => {
-    if (!image) return;
-    const [accent, tape] = styles[$('#stickerStyle').value] || styles.pink;
-    ctx.clearRect(0, 0, 480, 480);
-    ctx.save(); ctx.shadowColor = 'rgba(70,45,70,.18)'; ctx.shadowBlur = 18; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(45, 35, 390, 410, 42); ctx.fill(); ctx.restore();
-    ctx.save(); ctx.translate(240, 75); ctx.rotate(-0.035); ctx.fillStyle = tape; ctx.fillRect(-112, -14, 224, 28); ctx.restore();
-    const k = Math.min(330 / image.naturalWidth, 270 / image.naturalHeight), w = image.naturalWidth * k, h = image.naturalHeight * k, x = (480 - w) / 2, y = 220 - h / 2;
-    ctx.save(); ctx.beginPath(); ctx.roundRect(x, y, w, h, 18); ctx.clip(); ctx.drawImage(image, x, y, w, h); ctx.restore();
-    ctx.fillStyle = accent; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText($('#stickerEmoji').value || '✧', 240, 395);
-    dataUrl = canvas.toDataURL('image/png');
-    $('#saveSticker').disabled = false;
-    $('#studioHint').textContent = 'Önizleme hazır.';
+// ── stickers and washi tapes ────────────────────────────────────────────────
+function renderTrays() {
+  const stickers = store.assetsOf('sticker'), washis = store.assetsOf('washi');
+  $('#stickerTray').innerHTML = EMOJI.map((e) => `<button data-sticker="${e}">${e}</button>`).join('')
+    + stickers.map((a) => `<button class="mine" data-sticker-asset="${a.id}" aria-label="Kendi çıkartmam"><img src="${a.dataUrl}" alt=""></button>`).join('')
+    + '<button class="add" id="trayNewSticker" aria-label="Yeni çıkartma">＋</button>';
+  $('#washiTray').innerHTML = '<span>WASHI</span>'
+    + TAPES.map(([k, label]) => `<button class="washi-pick w-${k}${tape?.preset === k ? ' armed' : ''}" data-tape="${k}" aria-label="${label} bant"></button>`).join('')
+    + washis.map((a) => `<button class="washi-pick${tape?.asset === a.id ? ' armed' : ''}" data-tape-asset="${a.id}" style="background-image:url(${a.dataUrl})" aria-label="Kendi bandım"></button>`).join('')
+    + '<button class="washi-add" id="trayNewWashi" aria-label="Yeni bant">＋</button>';
+  $$('[data-sticker]', $('#stickerTray')).forEach((b) => { b.onclick = () => addPlaced(`<div class="placed sticker" style="left:60%;top:55%">${esc(b.dataset.sticker)}</div>`); });
+  $$('[data-sticker-asset]', $('#stickerTray')).forEach((b) => { b.onclick = () => placeSticker(b.dataset.stickerAsset); });
+  $('#trayNewSticker').onclick = openStickerSheet;
+  $$('[data-tape]', $('#washiTray')).forEach((b) => { b.onclick = () => arm({ preset: b.dataset.tape }); });
+  $$('[data-tape-asset]', $('#washiTray')).forEach((b) => { b.onclick = () => arm({ asset: b.dataset.tapeAsset }); });
+  $('#trayNewWashi').onclick = openWashiSheet;
+}
+
+function placeSticker(id) {
+  const a = store.getAsset(id);
+  if (!a) return;
+  addPlaced(`<img class="placed sticker-img" data-asset="${a.id}" src="${a.dataUrl}" alt="" style="left:34%;top:30%;width:34%">`);
+}
+
+/** Choose a tape, then draw it across the page with a finger. */
+function arm(next) {
+  const same = tape && tape.preset === next?.preset && tape.asset === next?.asset;
+  tape = next && !same ? next : null;
+  $('#canvasItems').classList.toggle('taping', !!tape);
+  if (tape) { select(null); if (drawMode) $('#drawToggle').click(); toast('Bandı sayfada parmağınla çek'); }
+  renderTrays();
+}
+
+function setupTape() {
+  const layer = $('#canvasItems');
+  let el = null, sx = 0, sy = 0, len = 0;
+  layer.addEventListener('pointerdown', (e) => {
+    if (!tape) return;
+    e.preventDefault(); e.stopPropagation();
+    const r = layer.getBoundingClientRect();
+    sx = e.clientX - r.left; sy = e.clientY - r.top; len = 0;
+    el = document.createElement('div');
+    el.className = `placed washi-object washi-tape${tape.preset ? ` w-${tape.preset}` : ''}`;
+    if (tape.asset) { el.dataset.asset = tape.asset; el.style.backgroundImage = `url(${store.getAsset(tape.asset)?.dataUrl || ''})`; }
+    el.style.cssText += `;left:${sx.toFixed(1)}px;top:${(sy - 15).toFixed(1)}px;width:0px;transform:rotate(0deg)`;
+    layer.appendChild(el);
+    layer.setPointerCapture(e.pointerId);
+  }, true);
+  layer.addEventListener('pointermove', (e) => {
+    if (!el) return;
+    const r = layer.getBoundingClientRect(), dx = e.clientX - r.left - sx, dy = e.clientY - r.top - sy;
+    len = Math.hypot(dx, dy);
+    const ang = (Math.atan2(dy, dx) * 180) / Math.PI;
+    el.style.width = `${len.toFixed(1)}px`;
+    el.style.transform = `rotate(${ang.toFixed(1)}deg)`;
+    el.dataset.rotation = ang.toFixed(1);
+  }, true);
+  const end = (e) => {
+    if (!el) return;
+    if (layer.hasPointerCapture(e.pointerId)) layer.releasePointerCapture(e.pointerId);
+    const made = el; el = null;
+    if (len < 24 || e.type === 'pointercancel') { made.remove(); return; }
+    haptic(10);
+    enableDrag(made); arm(null); select(made); savePage();
   };
-  $('#openStudio').onclick = () => { $('#studioModal').hidden = false; };
-  $('#closeStudio').onclick = () => { $('#studioModal').hidden = true; };
-  $('#studioModal').addEventListener('click', (e) => { if (e.target.id === 'studioModal') $('#studioModal').hidden = true; });
-  $('#studioPhoto').onchange = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (!f.type.startsWith('image/')) return toast('Lütfen bir görsel seç.');
-    const url = URL.createObjectURL(f), im = new Image();
-    im.onload = () => { image = im; draw(); URL.revokeObjectURL(url); };
-    im.src = url;
-  };
-  $('#stickerStyle').onchange = draw;
-  $('#stickerEmoji').oninput = draw;
-  $('#makeSticker').onclick = () => { if (!image) return toast('Önce fotoğraf seçmelisin.'); draw(); };
-  $('#saveSticker').onclick = () => {
-    if (!dataUrl) return;
-    const a = document.createElement('a'); a.href = dataUrl; a.download = `time-garden-${$('#stickerStyle').value}-sticker.png`; a.click();
-    addPlaced(`<img class="placed photo-sticker" src="${dataUrl}" alt="" style="left:28%;top:22%;width:44%">`);
-    $('#studioModal').hidden = true;
-    toast('Çıkartma indirildi ve sayfaya eklendi');
-  };
+  layer.addEventListener('pointerup', end, true);
+  layer.addEventListener('pointercancel', end, true);
+}
+
+function libraryHtml(kind) {
+  const list = store.assetsOf(kind);
+  return list.length ? `<p class="hint" style="text-align:left;margin:var(--s4) 0 var(--s2)">Kayıtlı olanlar (silmek için ×)</p><div class="lib">${list.map((a) => `<span class="lib-item ${kind}"><img src="${a.dataUrl}" alt=""><button data-del="${a.id}" aria-label="Sil">×</button></span>`).join('')}</div>` : '';
+}
+
+async function saveAsset(kind, make) {
+  try {
+    const a = await store.addAsset(kind, await make());
+    closeSheet(); renderTrays();
+    if (kind === 'sticker') { $('#stickerTray').hidden = false; toast('Çıkartma kaydedildi; çıkartmalarında duruyor'); placeSticker(a.id); }
+    else { toast('Bant kaydedildi'); arm({ asset: a.id }); }
+  } catch (e) { if (e) toast(e.message || 'Görsel eklenemedi.'); }
+}
+
+function openStickerSheet() {
+  openSheet('Yeni çıkartma', `<div class="menu">
+    <button id="sCam"><svg class="ic"><use href="#i-phone"/></svg><div><b>Kamerayla çek</b><small>Kare çerçevenin içindeki, beyaz kenarlı çıkartma olur</small></div></button>
+    <button id="sPaste"><svg class="ic"><use href="#i-spark"/></svg><div><b>Panodan yapıştır</b><small>Fotoğraflar’da nesneye basılı tut → Kopyala; arka plansız gelir</small></div></button>
+    <label class="menu-file"><svg class="ic"><use href="#i-book"/></svg><div><b>Galeriden seç</b><small>Arka planı şeffaf görseller olduğu gibi kalır</small></div><input type="file" id="sFile" accept="image/*" hidden></label>
+    </div>${libraryHtml('sticker')}`);
+  const b = $('#sheetBody');
+  $('#sCam', b).onclick = async () => { closeSheet(); const shot = await openCamera('sticker'); if (shot) saveAsset('sticker', () => makeSticker(shot, { square: true })); };
+  $('#sPaste', b).onclick = () => saveAsset('sticker', async () => makeSticker(await imageFromClipboard()));
+  $('#sFile', b).onchange = (e) => saveAsset('sticker', async () => makeSticker(await fileToImage(e.target.files[0])));
+  bindLibrary(b, openStickerSheet);
+}
+
+function openWashiSheet() {
+  openSheet('Yeni washi bandı', `<div class="menu">
+    <button id="wCam"><svg class="ic"><use href="#i-phone"/></svg><div><b>Kamerayla çek</b><small>Ayraç çerçevesinin içinde ne varsa bant o olur</small></div></button>
+    <label class="menu-file"><svg class="ic"><use href="#i-book"/></svg><div><b>Galeriden seç</b><small>Bir fotoğrafı bant dokusuna çevir</small></div><input type="file" id="wFile" accept="image/*" hidden></label>
+    </div>${libraryHtml('washi')}`);
+  const b = $('#sheetBody');
+  $('#wCam', b).onclick = async () => { closeSheet(); const shot = await openCamera('washi'); if (shot) saveAsset('washi', () => makeWashi(shot)); };
+  $('#wFile', b).onchange = (e) => saveAsset('washi', async () => makeWashi(await fileToImage(e.target.files[0])));
+  bindLibrary(b, openWashiSheet);
+}
+
+function bindLibrary(root, reopen) {
+  $$('[data-del]', root).forEach((x) => {
+    x.onclick = () => { if (tape?.asset === x.dataset.del) arm(null); store.removeAsset(x.dataset.del).then(() => { renderTrays(); reopen(); }).catch(() => toast('Silinemedi.')); };
+  });
 }
 
 export function bindJournal() {
-  setupDrawing(); setupTear(); setupStudio();
+  setupDrawing(); setupTear(); setupTape(); renderTrays();
+  $('#openStudio').onclick = openStickerSheet;
   $('#prevDay').onclick = () => changeDay(-1);
   $('#nextDay').onclick = () => changeDay(1);
   $('#journalNote').addEventListener('input', saveSoon);
@@ -298,14 +383,11 @@ export function bindJournal() {
   $('#addText').onclick = () => { addPlaced('<div class="placed text" style="left:12%;top:42%">Yeni not</div>'); editSelected(); };
   $('#stickerToggle').onclick = () => { $('#stickerTray').hidden = !$('#stickerTray').hidden; $('#decorTray').hidden = true; };
   $('#decorToggle').onclick = () => { $('#decorTray').hidden = !$('#decorTray').hidden; $('#stickerTray').hidden = true; };
-  $$('[data-sticker]').forEach((b) => { b.onclick = () => addPlaced(`<div class="placed sticker" style="left:60%;top:55%">${esc(b.dataset.sticker)}</div>`); });
-  $$('[data-washi]').forEach((b) => { b.onclick = () => addPlaced(`<div class="placed washi-object" style="left:8%;top:2%;width:84%;height:16px;background:${WASHI[b.dataset.washi]}"></div>`); });
   $$('[data-decor]').forEach((b) => {
     b.onclick = () => addPlaced({
       line: '<div class="placed decor-line" style="left:12%;top:40%;width:72%"></div>',
       dots: '<div class="placed decor-dots" style="left:20%;top:50%">• · • · • · •</div>',
       star: '<div class="placed sticker" style="left:45%;top:45%">✧</div>',
-      tape: `<div class="placed washi-object" style="left:10%;top:15%;width:80%;height:18px;background:${WASHI.pink}"></div>`,
     }[b.dataset.decor]);
   });
   $('#objectDelete').onclick = () => { if (selected) { selected.remove(); select(null); savePage(); } };

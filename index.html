@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="styles/app.css">
 <link rel="stylesheet" href="styles/journal.css">
 <link rel="stylesheet" href="styles/plan.css">
+<link rel="stylesheet" href="styles/camera.css">
 <title>Time Garden</title>
 <meta name="description" content="Zamanını keşfet, gününü yaratıcı bir günlükte sakla.">
 </head>
@@ -130,13 +131,11 @@
       <div class="journal-tools">
         <label class="tool-btn">Fotoğraf<input type="file" id="photoInput" accept="image/*" hidden></label>
         <button class="tool-btn" id="addText">Metin</button><button class="tool-btn" id="drawToggle">El yazısı</button>
-        <button class="tool-btn" id="stickerToggle">Çıkartma</button><button class="tool-btn" id="decorToggle">Çizgi / nokta</button><button class="tool-btn" id="openStudio">Sticker atölyesi</button>
+        <button class="tool-btn" id="stickerToggle">Çıkartma</button><button class="tool-btn" id="decorToggle">Çizgi / nokta</button><button class="tool-btn" id="openStudio">Yeni sticker</button>
       </div>
-      <div class="sticker-tray" id="stickerTray" hidden>
-        <button data-sticker="⌛">⌛</button><button data-sticker="💎">💎</button><button data-sticker="💗">💗</button><button data-sticker="🌙">🌙</button><button data-sticker="🪄">🪄</button><button data-sticker="🧁">🧁</button><button data-sticker="🦋">🦋</button><button data-sticker="⭐">⭐</button><button data-sticker="🐚">🐚</button>
-      </div>
-      <div class="decor-tray" id="decorTray" hidden><button data-decor="line">Uzun çizgi</button><button data-decor="dots">Noktalar</button><button data-decor="star">Yıldız</button><button data-decor="tape">Şerit</button></div>
-      <div class="washi-tray"><span>WASHI</span><button class="washi pink" data-washi="pink" aria-label="Pembe washi"></button><button class="washi lilac" data-washi="lilac" aria-label="Lila washi"></button><button class="washi gold" data-washi="gold" aria-label="Altın washi"></button><button class="washi mint" data-washi="mint" aria-label="Nane washi"></button></div>
+      <div class="sticker-tray" id="stickerTray" hidden></div>
+      <div class="decor-tray" id="decorTray" hidden><button data-decor="line">Uzun çizgi</button><button data-decor="dots">Noktalar</button><button data-decor="star">Yıldız</button></div>
+      <div class="washi-tray" id="washiTray"></div>
       <div class="object-toolbar" id="objectToolbar" hidden><span>Nesne seçildi</span><button id="objectSmaller">−</button><button id="objectBigger">＋</button><button id="objectRotate">↻</button><button id="objectFront">Öne al</button><button id="objectBack">Arkaya al</button><button id="objectEdit">Düzenle</button><button id="objectDelete">Sil</button></div>
       <div class="paper-stack">
         <div class="rings" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -194,19 +193,6 @@
 
 <!-- Bottom sheet used for create / edit forms -->
 <div class="sheet-backdrop" id="sheet" hidden><div class="sheet" role="dialog" aria-modal="true" id="sheetBody"></div></div>
-
-<!-- Sticker Atelier (unchanged feature set; rebuilt in a later phase) -->
-<div class="sheet-backdrop" id="studioModal" hidden>
- <section class="sheet studio-modal" role="dialog" aria-modal="true">
-  <div class="sheet-head"><h2>Sticker Atölyesi</h2><button type="button" class="icon-btn sm" id="closeStudio" aria-label="Kapat"><svg class="ic"><use href="#i-close"/></svg></button></div>
-  <label class="studio-upload">Fotoğraf çek veya galeriden seç<input type="file" id="studioPhoto" accept="image/*" hidden></label>
-  <div class="studio-preview-wrap"><canvas id="stickerCanvas" width="480" height="480"></canvas><p id="studioHint">Bir fotoğraf seç, koleksiyonunu belirle ve çıkartmanı oluştur.</p></div>
-  <label class="field">Koleksiyon<select id="stickerStyle"><option value="pink">Pink Dream</option><option value="moon">Moon Garden</option><option value="botanical">Botanical</option><option value="pixel">Pixel World</option><option value="lilac">Lavender Haze</option></select></label>
-  <label class="field">Emoji etiketi<input id="stickerEmoji" maxlength="4" value="💗"></label>
-  <div class="studio-actions"><button class="btn ghost" id="makeSticker" type="button">Çıkartma oluştur</button><button class="btn" id="saveSticker" type="button" disabled>PNG indir ve sayfaya ekle</button></div>
-  <p class="hint">Bu sürüm fotoğrafı washi çerçeveli bir PNG'ye yerleştirir. Arka plan silme, emoji ve GIF üretimi henüz yok.</p>
- </section>
-</div>
 
 <div class="toast" id="toast" role="status"></div>
 <script type="module" src="src/main.js"></script>
