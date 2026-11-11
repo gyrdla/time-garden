@@ -150,11 +150,16 @@ test('clock angle to time of day', () => {
   assert.equal(P.angleToMinutes(Math.sin(Math.PI * 14.26 / 12), -Math.cos(Math.PI * 14.26 / 12)), 14 * 60 + 15);
 });
 
-test('score grows with finished steps; table compares plan and measured time', () => {
+test('the deer earns food from finished steps and grows when fed; table compares plan and measured time', () => {
   const a = mk({ title: 'A', estimateMin: 30 }), a1 = mk({ title: 'A1', parentId: a.id, estimateMin: 20 }), a2 = mk({ title: 'A2', parentId: a.id, estimateMin: 40 });
   const tasks = [a, { ...a1, done: true, doneAt: at(9) }, a2];
-  assert.deepEqual(P.score(tasks, []), { xp: 12, level: 1, into: 12, need: 60 });
-  assert.equal(P.score(tasks, new Array(10).fill({})).level, 2);
+  const d0 = P.deer(tasks, [], 0);
+  assert.deepEqual([d0.earned, d0.food, d0.stage, d0.next.need], [1, 1, 'Minik', 3]);
+  const d1 = P.deer(tasks, [{}, {}, {}], 3);          // 4 earned, 3 already fed
+  assert.deepEqual([d1.food, d1.stage, d1.next.name, d1.next.need], [1, 'Yavru', 'Genç', 5]);
+  assert.ok(d1.size > d0.size);
+  assert.equal(P.deer([], [], 5).food, 0);            // never negative after un-ticking a step
+  assert.equal(P.deer(tasks, [], 60).next, null);
   const sessions = [{ id: 's', taskId: a1.id, name: 'A1', category: 'Çalışma', startedAt: at(9), endedAt: at(9, 25), pauses: [] }];
   const tb = P.projectTable(proj.id, tasks, sessions, []);
   assert.deepEqual(tb.rows.map((r) => [r.task.title, r.depth, r.estimateMin, r.actualMs / 60000, r.done]), [['A', 0, 60, 25, false], ['A1', 1, 20, 25, true], ['A2', 1, 40, 0, false]]);

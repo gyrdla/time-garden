@@ -71,18 +71,22 @@ export function openStart() {
   f.onsubmit = (e) => { e.preventDefault(); run(() => store.start({ name: f.name.value, category: f.category.value, note: f.note.value }), 'Zaman ölçümü başladı'); };
 }
 
+const QUICK = [['Instagram', 'active'], ['Safari', 'active'], ['Mesajlar', 'active'], ['Video', 'active'], ['Müzik', 'background']];
+
 export function openSecondary(preset = '') {
-  openSheet('Paralel kayıt', `<form id="f">
-    <label class="field">Aynı anda ne yapıyorsun?<input name="label" required maxlength="120" placeholder="Örn. Instagram" autocomplete="off" value="${esc(preset)}"></label>
-    ${recentChips('event')}
+  const running = new Set(store.openEvents().map((e) => e.label));
+  const quick = [...new Map([...store.recentNames('event', 5).map((n) => [n, null]), ...QUICK]).entries()].filter(([n]) => !running.has(n)).slice(0, 8);
+  openSheet('Paralel kayıt', `<div class="chips">${quick.map(([n, a]) => `<button type="button" class="chip" data-quick="${esc(n)}" data-att="${a || 'active'}">${esc(n)}</button>`).join('')}</div>
+    <p class="hint" style="text-align:left;margin:0 0 var(--s3)">Birine dokununca hemen başlar. Listede yoksa aşağıya yaz.</p>
+    <form id="f">
+    <label class="field">Başka bir şey<input name="label" required maxlength="120" placeholder="Örn. Podcast" autocomplete="off" value="${esc(preset)}"></label>
     <label class="check"><input type="checkbox" name="bg">Arka planda (müzik gibi; dikkatimi bölmüyor)</label>
     <p class="form-error" role="alert"></p>
     <div class="sheet-actions"><button class="btn full">${icon('play')}Şimdi başlat</button>
     <button type="button" class="btn ghost full" id="toPast">Geçmiş bir paralel kayıt ekle</button></div>
   </form>`);
   const f = $('#f', body());
-  bindFill(f.label);
-  if (!preset) f.label.focus();
+  $$('[data-quick]', body()).forEach((b) => { b.onclick = () => run(() => store.startSecondary({ label: b.dataset.quick, attention: b.dataset.att }), `${b.dataset.quick} başladı`); });
   $('#toPast', body()).onclick = () => openPast('event');
   f.onsubmit = (e) => { e.preventDefault(); run(() => store.startSecondary({ label: f.label.value, attention: f.bg.checked ? 'background' : 'active' }), 'Paralel kayıt başladı'); };
 }

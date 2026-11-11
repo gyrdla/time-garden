@@ -325,6 +325,14 @@ export function setRoutineDone(routineId, date, done) {
   return write(done ? db.put('routineLog', { id, routineId, date, doneAt: Date.now() }) : db.del('routineLog', id));
 }
 
+/** Give the deer one piece of food, if there is any. Returns the state before and after. */
+export function feedDeer() {
+  const fed = state.settings.deer?.fed || 0;
+  const before = planner.deer(state.tasks, state.routineLog, fed);
+  if (before.food < 1) throw new tracker.ValidationError('Yem yok. Bir adım tamamlayınca yem kazanırsın.');
+  return setSetting('deer', { ...(state.settings.deer || {}), fed: fed + 1 }).then(() => ({ before, after: planner.deer(state.tasks, state.routineLog, fed + 1) }));
+}
+
 export const userTemplates = () => state.settings.templates || [];
 export function saveTemplate(taskId) {
   const tpl = planner.templateFromTask(getTask(taskId), state.tasks);

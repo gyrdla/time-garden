@@ -77,7 +77,9 @@ body[data-theme="white"] .wordmark,body[data-theme="minimal"] .wordmark{font:700
 @keyframes pulse{50%{opacity:.25}}
 .live-clock{font-size:var(--fs-2xl);font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-.02em;margin:var(--s2) 0 var(--s3)}
 .live-actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
-.live-sub{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--line-soft)}
+.live-sub{margin-top:var(--s3)}
+.live-sub .chip{min-height:32px;font-size:var(--fs-xs)}
+.chip.add{background:none;border-style:dashed;color:var(--ink-soft)}
 .live-sub-head{font-size:var(--fs-xs);color:var(--ink-soft);margin-bottom:var(--s2);display:flex;justify-content:space-between}
 .chips{display:flex;flex-wrap:wrap;gap:var(--s2)}
 .chip.running{background:var(--secondary);color:#fff;border-color:transparent}

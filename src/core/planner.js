@@ -310,14 +310,23 @@ export function streak(tasks, routineLog, now = Date.now()) {
   return n;
 }
 
-const stepPoints = (t) => 10 + Math.min(20, Math.round((t.estimateMin || 0) / 10));
+const DEER = [[0, 'Minik'], [3, 'Yavru'], [8, 'Genç'], [15, 'Zarif'], [25, 'Görkemli'], [40, 'Efsanevi']];
 
-/** Garden points: every finished step and routine counts; longer steps count a little more. */
-export function score(tasks, routineLog) {
-  const xp = tasks.filter((t) => t.done && !tasks.some((k) => k.parentId === t.id)).reduce((n, t) => n + stepPoints(t), 0) + routineLog.length * 5;
-  let level = 1, floor = 0, need = 60;
-  while (xp >= floor + need) { floor += need; level++; need = 60 + (level - 1) * 30; }
-  return { xp, level, into: xp - floor, need };
+/**
+ * The deer: every finished step or routine earns one piece of food; feeding it makes it grow.
+ * `fed` is how many pieces have been given so far.
+ */
+export function deer(tasks, routineLog, fed = 0) {
+  const earned = tasks.filter((t) => t.done && !tasks.some((k) => k.parentId === t.id)).length + routineLog.length;
+  const given = Math.max(0, Math.floor(fed) || 0);
+  let i = 0;
+  while (i + 1 < DEER.length && given >= DEER[i + 1][0]) i++;
+  const next = DEER[i + 1] || null;
+  return {
+    earned, fed: given, food: Math.max(0, earned - given), stage: DEER[i][1], stageIndex: i,
+    next: next ? { name: next[1], need: next[0] - given, pct: (given - DEER[i][0]) / (next[0] - DEER[i][0]) } : null,
+    size: 0.42 + 0.58 * Math.min(1, given / DEER[DEER.length - 1][0]),
+  };
 }
 
 /** Plan vs measured for one project, one row per task in tree order. */

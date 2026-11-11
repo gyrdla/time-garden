@@ -8,6 +8,7 @@ import { renderCalendar, bindCalendar } from './ui/calendar.js';
 import { renderAnalysis, bindAnalysis } from './ui/analysis.js';
 import { renderJournal, bindJournal } from './ui/journal.js';
 import { renderThemes, bindThemes, applyTheme } from './ui/themes.js';
+import { VERSION } from './version.js';
 import { bindSheets, openCreateMenu } from './ui/sheets.js';
 import { renderPlan, bindPlan, tickPlan } from './ui/plan.js';
 
@@ -25,6 +26,8 @@ async function boot() {
   store.setErrorHandler(() => toast('Kaydedilemedi. Depolama dolu olabilir; yedek almanı öneririm.'));
   bindNav(); bindSheets(); bindHome(); bindCalendar(); bindAnalysis(); bindJournal(); bindThemes(); bindPlan();
   $('#navAdd').onclick = openCreateMenu;
+
+  $('#homeVersion').textContent = `Time Garden ${VERSION}`;
 
   await store.init();
   applyTheme();

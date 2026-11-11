@@ -66,7 +66,7 @@ export function renderCalendar() {
   const content = $('#calendarContent');
   content.innerHTML = mode === 'month' ? monthView(now) : mode === 'week' ? weekView(now) : yearView(now);
   $$('[data-day]', content).forEach((b) => { b.onclick = () => openDay(b.dataset.day); });
-  $$('[data-month]', content).forEach((b) => { b.onclick = () => { anchor = Number(b.dataset.month); setMode('month'); }; });
+  $$('[data-month]', content).forEach((b) => { b.onclick = () => setMode('month', Number(b.dataset.month)); });
 
   const range = periodRange(mode, anchor);
   const s = summarize(store.state.sessions, store.state.events, range, now);
@@ -79,10 +79,12 @@ export function renderCalendar() {
       : '<p>Bu dönemde kayıt yok.</p>');
 }
 
-function setMode(m) {
-  // Keep "today" in view when the period on screen contains it; otherwise stay where the user navigated.
+function setMode(m, goTo = null) {
+  // An explicit target (a month tapped in the year view) wins. Otherwise keep "today" in view
+  // when the period on screen contains it, and stay where the user navigated when it does not.
   const [s, e] = periodRange(mode, anchor), now = Date.now();
-  if (m !== mode) anchor = now >= s && now < e ? now : s;
+  if (goTo != null) anchor = goTo;
+  else if (m !== mode) anchor = now >= s && now < e ? now : s;
   mode = m;
   $$('#calendarModes button').forEach((b) => b.classList.toggle('selected', b.dataset.mode === m));
   renderCalendar();

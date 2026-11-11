@@ -27,6 +27,8 @@ const allTemplates = () => [...store.userTemplates(), ...P.TEMPLATES];
 const todayIso = () => isoDate(Date.now());
 const plan = (ts) => P.dayPlan(ts, store.state.tasks, store.state.routines, store.state.routineLog, store.state.projects);
 
+const deerNow = () => P.deer(store.state.tasks, store.state.routineLog, store.state.settings.deer?.fed || 0);
+
 // ── the light game layer ───────────────────────────────────────────────────
 function burst(el) {
   if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -44,16 +46,16 @@ function burst(el) {
 async function toggleTask(id, el) {
   const t = store.getTask(id);
   if (!t) return;
-  const { tasks, routineLog } = store.state;
-  const was = P.isDone(t, tasks), before = P.stage(P.progress(tasks, t.projectId).pct).name, lvl = P.score(tasks, routineLog).level;
+  const { tasks } = store.state;
+  const was = P.isDone(t, tasks), before = P.stage(P.progress(tasks, t.projectId).pct).name, food0 = deerNow().food;
   if (!was) burst(el);
   try {
     const { unlocked } = await store.setTaskDone(id, !was);
     if (was) return;
     haptic(15);
-    const pr = P.progress(store.state.tasks, t.projectId), st = P.stage(pr.pct), sc = P.score(store.state.tasks, store.state.routineLog);
+    const pr = P.progress(store.state.tasks, t.projectId), st = P.stage(pr.pct), gained = deerNow().food - food0;
     const bits = [`${pr.done}/${pr.total} adım`];
-    if (sc.level > lvl) bits.push(`Bahçe seviyesi ${sc.level}`);
+    if (gained > 0) bits.push(`＋${gained} yem`);
     if (st.name !== before) bits.push(`${st.icon} ${store.getProject(t.projectId)?.name || 'Proje'} artık ${st.name}`);
     if (unlocked.length) bits.push(`Sıradaki açıldı: ${unlocked[0].title}`);
     toast(bits.join(' · '));
@@ -109,16 +111,31 @@ export function tickPlan() {
   $$('#planScreen [data-since]').forEach((n) => { n.textContent = fmtLive(now - Number(n.dataset.since)); });
 }
 
-function gameStrip(now) {
+/** The deer card: finished steps become food, feeding makes the deer grow. */
+function deerCard(now) {
   const { tasks, routineLog } = store.state;
-  const d = plan(now), doneToday = P.doneOn(isoDate(now), tasks, routineLog), streak = P.streak(tasks, routineLog, now), sc = P.score(tasks, routineLog);
-  const stars = [0, 1, 2].map((i) => `<span class="star${doneToday > i ? ' on' : ''}">★</span>`).join('');
-  return `<section class="card game"><div class="card-head"><h2>${d.total ? `Bugün ${d.done}/${d.total}` : 'Bugün için plan yok'}</h2>
-    <span class="chip${streak ? '' : ' quiet'}">${streak ? `${streak} gün seri` : 'Seri başlamadı'}</span></div>
-    <div class="quest"><span class="stars" aria-label="Günlük hedef: 3 adım, ${Math.min(3, doneToday)} tamam">${stars}</span><span>Günlük hedef: 3 adım${doneToday >= 3 ? ' · tamam!' : ''}</span>
-    <span class="lvl">Seviye ${sc.level}</span></div>
-    <div class="stack"><i style="--c:var(--accent-2);width:${Math.round((sc.into / sc.need) * 100)}%"></i></div>
-    <p>${sc.need - sc.into} puan sonra seviye ${sc.level + 1}. Her tamamlanan adım bahçeni büyütür.</p></section>`;
+  const d = deerNow(), today = plan(now), streak = P.streak(tasks, routineLog, now);
+  return `<section class="card deer"><div class="deer-pen"><img id="deerImg" src="assets/deer.gif" alt="Geyiğim" style="--size:${d.size.toFixed(2)}" draggable="false"></div>
+    <div class="deer-info"><div class="card-head"><h2>${d.stage} geyik</h2><span class="chip${streak ? '' : ' quiet'}">${streak ? `${streak} gün seri` : 'Seri yok'}</span></div>
+      <div class="stack"><i style="--c:var(--accent-2);width:${d.next ? Math.round(d.next.pct * 100) : 100}%"></i></div>
+      <p>${d.next ? `${d.next.need} yem sonra ${d.next.name}` : 'En büyük hâline ulaştı'} · bugün ${today.done}/${today.total}</p>
+      <button class="btn sm" id="feedDeer"${d.food ? '' : ' disabled'}>${d.food ? `Besle · ${d.food} yem` : 'Yem yok'}</button>
+      ${d.food ? '' : '<small class="deer-tip">Her tamamlanan adım bir yem kazandırır.</small>'}</div></section>`;
+}
+
+function bindDeer(root) {
+  const b = $('#feedDeer', root);
+  if (!b) return;
+  b.onclick = () => {
+    const img = $('#deerImg', root);
+    burst(img);
+    haptic(15);
+    act(store.feedDeer().then(({ before, after }) => {
+      const now = $('#deerImg');
+      if (now) { now.classList.remove('fed'); void now.offsetWidth; now.classList.add('fed'); }
+      toast(after.stage !== before.stage ? `Geyiğin büyüdü: artık ${after.stage}` : (after.next ? `Afiyet olsun · ${after.next.need} yem sonra ${after.next.name}` : 'Afiyet olsun'));
+    }));
+  };
 }
 
 // ── shared pieces ──────────────────────────────────────────────────────────
@@ -211,7 +228,7 @@ function bindDrag(root) {
 }
 
 function bindCommon(root) {
-  bindLive(root); bindDrag(root);
+  bindLive(root); bindDrag(root); bindDeer(root);
   $$('[data-day]', root).forEach((b) => { b.onclick = () => { dayAnchor = Number(b.dataset.day); tab = 'day'; renderPlan(); }; });
   $$('[data-task]', root).forEach((b) => { b.onclick = () => openTask(b.dataset.task); });
   $$('[data-start]', root).forEach((b) => { b.onclick = () => startTask(b.dataset.start); });
@@ -242,7 +259,7 @@ function dayView(now) {
     <button class="grow" data-kind="${i.kind}" data-id="${i.id}"><b>${i.done ? '✓ ' : ''}${esc(i.title)}</b><small>${fmtTime(i.start)}–${fmtTime(i.end)}${i.kind === 'routine' ? ' · rutin' : ` · ${esc(store.getProject(i.projectId)?.name || '')}`}${i.parallel ? ' · aynı anda' : ''}${i.blocked ? ' · bekliyor' : ''}</small></button>
     <span class="row-acts">${i.kind === 'task' && !i.done ? '<span class="grip" aria-label="Sürükle">⠿</span>' : ''}${i.done ? '' : (i.kind === 'task' ? `<button class="icon-btn sm" data-start="${i.id}" aria-label="Başlat">${icon('play')}</button>` : `<button class="icon-btn sm" data-rdone="${i.id}" aria-label="Tamamla">✓</button>`)}</span></div>`;
   const [ws, we] = periodRange('week', dayAnchor);
-  return `${liveBar(now)}${isToday ? gameStrip(now) : ''}
+  return `${liveBar(now)}${isToday ? deerCard(now) : ''}
     <div class="period-nav"><button class="icon-btn sm" id="planPrev" aria-label="Önceki hafta">${icon('back')}</button><div><b>${fmtLongDate(dayAnchor)}</b><small>${isToday ? 'Bugün' : weekTitle(ws, we)}</small></div><button class="icon-btn sm" id="planNext" aria-label="Sonraki hafta">${icon('next')}</button></div>
     ${weekRow(now, iso)}
     ${clash.length ? `<p class="warn">Aynı saate denk gelen ${clash.length} çift var: ${clash.slice(0, 2).map(([a, b]) => `“${esc(a.title)}” ile “${esc(b.title)}”`).join(', ')}. Birlikte yapılabiliyorsa görevi “aynı anda yapılabilir” olarak işaretle.</p>` : ''}
@@ -325,14 +342,6 @@ function bindPeriod(root, kind) {
 // ── projects ───────────────────────────────────────────────────────────────
 const fmtMin = (m) => (m ? fmtDur(m * MIN) : '—');
 
-function gardenCard() {
-  const { projects, tasks, routineLog } = store.state, sc = P.score(tasks, routineLog);
-  const plants = projects.filter((p) => !p.archived).map((p) => { const st = P.stage(P.progress(tasks, p.id).pct); return `<button class="plant s-${['Tohum', 'Filiz', 'Fidan', 'Tomurcuk', 'Çiçek'].indexOf(st.name)}" data-project="${p.id}" aria-label="${esc(p.name)}: ${st.name}"><span>${st.icon}</span><small>${esc(p.name)}</small></button>`; }).join('');
-  return `<section class="card game"><div class="card-head"><h2>Bahçem</h2><span class="chip">Seviye ${sc.level} · ${sc.xp} puan</span></div>
-    <div class="garden">${plants}</div><div class="stack"><i style="--c:var(--accent-2);width:${Math.round((sc.into / sc.need) * 100)}%"></i></div>
-    <p>Her proje bir bitki: adımlar tamamlandıkça tohumdan çiçeğe büyür.</p></section>`;
-}
-
 function projectsView() {
   const { projects, tasks, sessions, events } = store.state;
   const live = projects.filter((p) => !p.archived);
@@ -340,7 +349,7 @@ function projectsView() {
     return `<p class="empty-note" style="margin-bottom:var(--s4)">Her projen burada ayrı bir bahçe. Projeyi ekle, görevlerini yaz, değnekle adımlara böl, sonra günlere ve saatlere yerleştir.</p>
       <button class="btn full" id="addProject">${icon('plus')}İlk projeni ekle</button>`;
   }
-  const toggle = `<div class="segmented slim" id="listView"><button data-v="garden" class="${listView === 'garden' ? 'selected' : ''}">Bahçe</button><button data-v="table" class="${listView === 'table' ? 'selected' : ''}">Tablo</button></div>`;
+  const toggle = `<div class="segmented slim" id="listView"><button data-v="garden" class="${listView === 'garden' ? 'selected' : ''}">Kartlar</button><button data-v="table" class="${listView === 'table' ? 'selected' : ''}">Tablo</button></div>`;
   if (listView === 'table') {
     const rows = live.map((p) => { const pr = P.progress(tasks, p.id), tb = P.projectTable(p.id, tasks, sessions, events), next = P.nextStep(tasks, p.id);
       return `<tr data-project="${p.id}"><th>${P.stage(pr.pct).icon} ${esc(p.name)}</th><td>${esc(p.area)}</td><td>${pr.done}/${pr.total}</td><td>${fmtMin(tb.estimateMin)}</td><td>${tb.actualMs ? fmtDur(tb.actualMs) : '—'}</td><td>${next ? esc(next.title) : '—'}</td></tr>`; }).join('');
@@ -355,7 +364,7 @@ function projectsView() {
       <p>${pr.total ? `${pr.done}/${pr.total} adım` : 'Henüz adım yok'}${spent ? ` · ${fmtDur(spent)} ölçüldü` : ''}${next ? ` · sıradaki: ${esc(next.title)}` : ''}</p></button>`;
   };
   const archived = projects.filter((p) => p.archived);
-  return `${gardenCard()}${toggle}${areas.map((a) => `<h2 class="section-h area-h">${esc(a)}</h2>${live.filter((p) => p.area === a).map(card).join('')}`).join('')}
+  return `${deerCard(Date.now())}${toggle}${areas.map((a) => `<h2 class="section-h area-h">${esc(a)}</h2>${live.filter((p) => p.area === a).map(card).join('')}`).join('')}
     <button class="btn ghost full" id="addProject">${icon('plus')}Proje ekle</button>
     ${archived.length ? `<h2 class="section-h area-h">Arşiv</h2>${archived.map(card).join('')}` : ''}`;
 }

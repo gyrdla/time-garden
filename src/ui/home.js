@@ -10,8 +10,6 @@ import { openStart, openSecondary, openPast, openEditSession, openEditEvent } fr
 import { openDay } from './nav.js';
 import { afterFinish } from './plan.js';
 
-const QUICK = [['Instagram', 'active'], ['Safari', 'active'], ['Mesajlar', 'active'], ['Video', 'active'], ['Müzik', 'background']];
-
 function act(promise) {
   Promise.resolve(promise).catch((e) => toast(e instanceof ValidationError ? e.message : 'Kaydedilemedi. Lütfen tekrar dene.'));
 }
@@ -20,17 +18,12 @@ function renderLive() {
   const card = $('#liveCard'), s = store.activeSession(), now = Date.now();
   const open = store.openEvents();
   const chips = open.map((e) => `<button class="chip running" data-end="${e.id}">${esc(e.label)} · <span data-since="${e.startedAt}">${fmtLive(now - e.startedAt)}</span><span class="x" aria-label="Bitir">×</span></button>`).join('');
-  const running = new Set(open.map((e) => e.label));
-  const quick = [...new Map([...store.recentNames('event', 4).map((n) => [n, null]), ...QUICK]).entries()]
-    .filter(([n]) => !running.has(n)).slice(0, 5)
-    .map(([n, a]) => `<button class="chip" data-quick="${esc(n)}" data-att="${a || ''}">＋ ${esc(n)}</button>`).join('');
-  const sub = `<div class="live-sub"><div class="live-sub-head"><span>Aynı anda (elle işaretlenir)</span></div>
-    <div class="chips">${chips}${quick}<button class="chip" id="moreSecondary">＋ Başka</button></div></div>`;
+  const sub = `<div class="live-sub"><div class="chips">${chips}<button class="chip add" id="addSecondary">＋ Paralel</button></div></div>`;
 
   if (!s) {
     card.className = 'card live';
     card.innerHTML = `<p class="idle-title">Şu an ne yapıyorsun?</p><p class="idle-sub">Başlat'a bas, bitirdiğinde durdur. Süreyi saat ölçer, sen yazmazsın.</p>
-      <button class="btn full" id="startBtn">${icon('play')}Etkinlik başlat</button>${open.length ? sub : ''}`;
+      <button class="btn full" id="startBtn">${icon('play')}Etkinlik başlat</button>${sub}`;
     $('#startBtn').onclick = openStart;
   } else {
     const paused = isPaused(s);
@@ -46,8 +39,7 @@ function renderLive() {
     $('#finishBtn').onclick = () => { haptic(20); act(store.finish().then(afterFinish)); };
   }
   $$('[data-end]', card).forEach((b) => { b.onclick = () => act(store.endSecondary(b.dataset.end)); });
-  $$('[data-quick]', card).forEach((b) => { b.onclick = () => { haptic(); act(store.startSecondary({ label: b.dataset.quick, attention: b.dataset.att || 'active' })); }; });
-  const more = $('#moreSecondary');
+  const more = $('#addSecondary');
   if (more) more.onclick = () => openSecondary();
 }
 

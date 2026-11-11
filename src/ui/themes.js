@@ -2,6 +2,7 @@
 
 import { $, $$, toast } from './dom.js';
 import * as store from '../core/store.js';
+import { VERSION } from '../version.js';
 
 const THEMES = ['pearl', 'white', 'lavender', 'sunset', 'nature', 'minimal'];
 
@@ -20,7 +21,7 @@ export function renderThemes() {
   $('#storageInfo').textContent = store.state.persistent
     ? `Kayıtların hesap olmadan, yalnızca bu cihazda tutulur: ${sessions.length} etkinlik, ${events.length} paralel kayıt, ${pages.size} günlük sayfası, ${projects.length} proje, ${tasks.length} görev.`
     : 'Bu tarayıcı kalıcı depolamaya izin vermiyor (gizli sekme olabilir). Kayıtlar sayfa kapanınca silinir.';
-  $('#versionInfo').textContent = 'Time Garden 2.1 · veri şeması 3';
+  $('#versionInfo').textContent = `Time Garden ${VERSION} · veri şeması 3`;
 }
 
 export function bindThemes() {
