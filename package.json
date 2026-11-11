@@ -1,0 +1,11 @@
+{
+  "name": "time-garden",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first time journal PWA. No build step: the repository root is the deployable site.",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "python3 -m http.server 8080"
+  }
+}
