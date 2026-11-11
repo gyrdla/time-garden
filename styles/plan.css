@@ -1,24 +1,18 @@
-/* Plan screen: agenda, week plan, project tree. Tokens only. */
+/* Plan screen: day clock, week plan, project tree. Tokens only. */
 
 .game p{margin-top:0}
 .game .stack{margin:var(--s2) 0}
 .stage{margin-right:var(--s2)}
 .warn{font-size:var(--fs-sm);padding:var(--s3) var(--s4);border-radius:var(--r-md);background:color-mix(in srgb,var(--secondary) 14%,var(--surface-strong));margin-bottom:var(--s3)}
 
-.agenda{position:relative;margin-bottom:var(--s2);border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);overflow:hidden}
-.ag-hour{position:absolute;left:0;right:0;height:0;border-top:1px solid var(--line-soft)}
-.ag-hour span{position:absolute;left:8px;top:2px;font-size:10px;color:var(--ink-faint);font-variant-numeric:tabular-nums}
-.ag-item{position:absolute;left:calc(46px + (100% - 46px - 22px) * var(--col) / var(--cols));width:calc((100% - 46px - 22px) / var(--cols) - 3px);padding:4px 8px;border-radius:10px;text-align:left;overflow:hidden;background:color-mix(in srgb,var(--c) 30%,var(--surface-strong));border-left:4px solid var(--c);line-height:1.2}
-.ag-item b{display:block;font-size:var(--fs-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ag-item small{display:block;font-size:10px;color:var(--ink-soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ag-item.short small{display:none}
-.ag-item.par{border-left-style:dashed}
-.ag-item.routine{background:color-mix(in srgb,var(--c) 16%,var(--surface-strong))}
-.ag-item.done{opacity:.55}
-.ag-item.done b{text-decoration:line-through}
-.ag-real{position:absolute;right:6px;width:10px;border-radius:5px;background:var(--c)}
-.ag-now{position:absolute;left:40px;right:0;height:0;border-top:2px solid var(--ink);z-index:2}
-.ag-now::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:var(--ink)}
+.plan-dial{width:min(84vw,340px);margin:0 auto var(--s2)}
+.plan-dial .dial-center{inset:33%}
+.plan-dial .dial-center strong{font-size:var(--fs-lg)}
+.plan-dial .dial-center small{padding:0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.pd-item{cursor:pointer;stroke-linecap:butt}
+.pd-item.par{stroke-dasharray:5 1.5}
+.pd-item.done{opacity:.4}
+.plan-row.is-done b{text-decoration:line-through;color:var(--ink-soft)}
 
 .plan-row{grid-template-columns:auto 1fr auto;padding:var(--s2) var(--s3) var(--s2) var(--s4)}
 .plan-row .grow{text-align:left;min-height:44px;min-width:0}

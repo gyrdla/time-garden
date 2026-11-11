@@ -45,3 +45,37 @@ export function renderDial(svg, sessions, events, range, now) {
   svg.setAttribute('viewBox', '-14 -14 268 268');
   svg.innerHTML = out;
 }
+
+/**
+ * Plan dial: the day as a 24-hour clock. Planned items sit on the outer band — items that
+ * overlap share the band as concentric rings — and measured time is the thin inner ring.
+ * items: output of planner.layout() with a `color`; actual: [{ iv:[start,end], color }].
+ */
+export function renderPlanDial(svg, items, actual, range, now) {
+  const len = range[1] - range[0];
+  const f = (t) => Math.max(0, Math.min(1, (t - range[0]) / len));
+  const OUT = 106, IN = 68, band = OUT - IN, REAL = 56;
+  let out = `<circle class="track" cx="${C}" cy="${C}" r="${(OUT + IN) / 2}" stroke-width="${band}"/>`
+    + `<circle class="track" cx="${C}" cy="${C}" r="${REAL}" stroke-width="7" opacity=".6"/>`;
+  for (const i of items) {
+    const w = band / i.cols, r = OUT - w * (i.col + 0.5);
+    const a = f(i.start), b = Math.max(f(i.end), a + 0.004);
+    out += `<path class="pd-item${i.done ? ' done' : ''}${i.parallel ? ' par' : ''}" data-kind="${i.kind}" data-id="${i.id}" data-col="${i.col}" data-cols="${i.cols}"
+      d="${arc(r, a, b)}" fill="none" stroke="${i.color}" stroke-width="${(w - 1.5).toFixed(1)}"><title>${i.label}</title></path>`;
+  }
+  for (const a of actual) out += `<path class="pd-real" d="${arc(REAL, f(a.iv[0]), Math.max(f(a.iv[1]), f(a.iv[0]) + 0.003))}" fill="none" stroke="${a.color}" stroke-width="7"/>`;
+  for (let h = 0; h < 24; h++) {
+    const [x0, y0] = pt(OUT + 2, h / 24), [x1, y1] = pt(OUT + (h % 3 ? 4 : 7), h / 24);
+    out += `<line class="tick" x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}"/>`;
+  }
+  for (let h = 0; h < 24; h += 3) {
+    const [x, y] = pt(OUT + 16, h / 24);
+    out += `<text class="hour" x="${x.toFixed(1)}" y="${y.toFixed(1)}">${String(h).padStart(2, '0')}</text>`;
+  }
+  if (now >= range[0] && now < range[1]) {
+    const [x0, y0] = pt(REAL - 8, f(now)), [x1, y1] = pt(OUT + 3, f(now));
+    out += `<line class="now" x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}"/>`;
+  }
+  svg.setAttribute('viewBox', '-18 -18 276 276');
+  svg.innerHTML = out;
+}

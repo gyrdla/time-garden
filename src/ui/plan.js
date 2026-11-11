@@ -1,4 +1,4 @@
-// Plan: the "team of one" screen. Day agenda (plan next to what was really tracked),
+// Plan: the "team of one" screen. Day as a 24-hour clock (plan next to what was really tracked),
 // week overview with routines, and projects broken down into nested steps.
 
 import { $, $$, esc, icon, toast, haptic, catColor, fmtLongDate, WEEKDAYS, toLocalInput, fromLocalInput } from './dom.js';
@@ -9,13 +9,13 @@ import { dayRange, isoDate, fmtDur, fmtTime, clipAll, sessionActive, MIN } from 
 import { periodRange } from '../core/analytics.js';
 import { openSheet, closeSheet, run } from './sheets.js';
 import { go } from './nav.js';
+import { renderPlanDial } from './dial.js';
 
 let tab = 'day';
 let dayAnchor = Date.now();
 let openProject = null;
 const collapsed = new Set();
 
-const HOUR = 56; // px per hour in the agenda
 const AREAS = ['Bilim', 'İçerik', 'Yazılım', 'İş arama', 'Kişisel'];
 const act = (p) => Promise.resolve(p).catch((e) => toast(e instanceof ValidationError ? e.message : 'Kaydedilemedi. Lütfen tekrar dene.'));
 const whenText = (ts) => `${new Date(ts).toLocaleDateString('tr-TR', { weekday: 'short', day: 'numeric', month: 'short' })} ${fmtTime(ts)}`;
@@ -62,32 +62,26 @@ function dayView(now) {
   const range = dayRange(dayAnchor);
   const { tasks, routines, routineLog, sessions, projects } = store.state;
   const items = P.layout(P.agenda(range, tasks, routines, routineLog, projects));
-  const actual = sessions.flatMap((s) => clipAll(sessionActive(s, now), range).map((iv) => ({ iv, s })));
-  const hourOf = (ts) => (ts - range[0]) / 3_600_000;
-  const all = [...items.map((i) => [i.start, i.end]), ...actual.map((a) => a.iv)];
-  const h0 = Math.max(0, Math.min(7, Math.floor(Math.min(...all.map((x) => hourOf(x[0])), 7))));
-  const h1 = Math.min(24, Math.max(22, Math.ceil(Math.max(...all.map((x) => hourOf(x[1])), 22))));
-  const y = (ts) => (Math.max(h0, Math.min(h1, hourOf(ts))) - h0) * HOUR;
   const isToday = isoDate(dayAnchor) === isoDate(now);
-
-  let grid = '';
-  for (let h = h0; h <= h1; h++) grid += `<div class="ag-hour" style="top:${(h - h0) * HOUR}px"><span>${String(h % 24).padStart(2, '0')}:00</span></div>`;
-  const blocks = items.map((i) => {
-    const top = y(i.start), height = Math.max(30, y(i.end) - top - 2);
-    return `<button class="ag-item${height < 40 ? ' short' : ''}${i.done ? ' done' : ''}${i.kind === 'routine' ? ' routine' : ''}${i.parallel ? ' par' : ''}" data-kind="${i.kind}" data-id="${i.id}"
-      style="top:${top}px;height:${height}px;--col:${i.col};--cols:${i.cols};--c:${i.kind === 'routine' ? 'var(--accent-2)' : projColor(i.projectId)}">
-      <b>${i.done ? '✓ ' : ''}${esc(i.title)}</b><small>${fmtTime(i.start)}–${fmtTime(i.end)}${i.kind === 'routine' ? ' · rutin' : ''}${i.parallel ? ' · aynı anda' : ''}${i.blocked ? ' · bekliyor' : ''}</small></button>`;
-  }).join('');
-  const real = actual.map(({ iv, s }) => `<i class="ag-real" title="${esc(s.name)}" style="top:${y(iv[0])}px;height:${Math.max(3, y(iv[1]) - y(iv[0]))}px;--c:${catColor(s.category)}"></i>`).join('');
-  const nowLine = isToday && hourOf(now) >= h0 && hourOf(now) <= h1 ? `<div class="ag-now" style="top:${y(now)}px"></div>` : '';
   const clash = P.conflicts(items);
+  const next = isToday ? items.find((i) => !i.done && i.end > now) : null;
+  const centre = !items.length ? ['Plan yok', 'bu gün boş']
+    : next ? [fmtTime(next.start), esc(next.title)]
+      : [`${items.filter((i) => i.done).length}/${items.length}`, 'tamamlandı'];
+  const color = (i) => (i.kind === 'routine' ? 'var(--accent-2)' : projColor(i.projectId));
+  const row = (i) => `<div class="flow-item plan-row${i.done ? ' is-done' : ''}"><span class="bar-c" style="--c:${color(i)}"></span>
+    <button class="grow" data-kind="${i.kind}" data-id="${i.id}"><b>${i.done ? '✓ ' : ''}${esc(i.title)}</b><small>${fmtTime(i.start)}–${fmtTime(i.end)}${i.kind === 'routine' ? ' · rutin' : ` · ${esc(store.getProject(i.projectId)?.name || '')}`}${i.parallel ? ' · aynı anda' : ''}${i.blocked ? ' · bekliyor' : ''}</small></button>
+    ${i.done ? '' : (i.kind === 'task' ? `<button class="icon-btn sm" data-start="${i.id}" aria-label="Başlat">${icon('play')}</button>` : `<button class="icon-btn sm" data-rdone="${i.id}" aria-label="Tamamla">✓</button>`)}</div>`;
 
   const waiting = projects.filter((p) => !p.archived).map((p) => P.nextStep(tasks, p.id)).filter((t) => t && t.scheduledAt == null);
   return `${isToday ? gameStrip(now) : ''}
-    <div class="period-nav"><button class="icon-btn sm" id="planPrev" aria-label="Önceki gün">${icon('back')}</button><div><b>${fmtLongDate(dayAnchor)}</b><small>${isToday ? 'Bugün' : 'Solda plan, sağ şeritte ölçülen zaman'}</small></div><button class="icon-btn sm" id="planNext" aria-label="Sonraki gün">${icon('next')}</button></div>
+    <div class="period-nav"><button class="icon-btn sm" id="planPrev" aria-label="Önceki gün">${icon('back')}</button><div><b>${fmtLongDate(dayAnchor)}</b><small>${isToday ? 'Bugün' : '24 saatlik plan'}</small></div><button class="icon-btn sm" id="planNext" aria-label="Sonraki gün">${icon('next')}</button></div>
     ${clash.length ? `<p class="warn">Aynı saate denk gelen ${clash.length} çift var: ${clash.slice(0, 2).map(([a, b]) => `“${esc(a.title)}” ile “${esc(b.title)}”`).join(', ')}. Birlikte yapılabiliyorsa görevi “aynı anda yapılabilir” olarak işaretle.</p>` : ''}
-    <div class="agenda" style="height:${(h1 - h0) * HOUR + 12}px">${grid}${blocks}${real}${nowLine}</div>
-    <p class="hint">Solda planladıkların, sağdaki ince şeritte gerçekten ölçülen zaman.</p>
+    <section class="card"><div class="dial-wrap plan-dial"><svg id="planDial" class="dial" role="img" aria-label="Günün 24 saatlik planı"></svg>
+      <div class="dial-center"><strong>${centre[0]}</strong><small>${centre[1]}</small></div></div>
+      <p class="card-note">Dış halka plan (üst üste binenler iç içe halkalar), iç ince halka ölçülen zaman. Bir dilime dokununca görev açılır.</p></section>
+    <section class="block"><div class="block-head"><h2>Günün sırası</h2></div>
+      ${items.length ? `<div class="flow day-list">${items.map(row).join('')}</div>` : '<p class="empty-note">Bu güne saat verilmiş görev ya da rutin yok.</p>'}</section>
     <section class="block"><div class="block-head"><h2>Sırada bekleyenler</h2></div>
       ${waiting.length ? `<div class="flow">${waiting.map((t) => `<div class="flow-item plan-row"><span class="bar-c" style="--c:${projColor(t.projectId)}"></span>
         <button class="grow" data-task="${t.id}"><b>${esc(t.title)}</b><small>${esc(store.getProject(t.projectId)?.name || '')}${t.estimateMin ? ` · ${t.estimateMin} dk` : ''}</small></button>
@@ -97,12 +91,20 @@ function dayView(now) {
 }
 
 function bindDay(root) {
+  const now = Date.now(), range = dayRange(dayAnchor);
+  const { tasks, routines, routineLog, sessions, projects } = store.state;
+  const items = P.layout(P.agenda(range, tasks, routines, routineLog, projects))
+    .map((i) => ({ ...i, color: i.kind === 'routine' ? 'var(--accent-2)' : projColor(i.projectId), label: `${esc(i.title)} ${fmtTime(i.start)}–${fmtTime(i.end)}` }));
+  const actual = sessions.flatMap((s) => clipAll(sessionActive(s, now), range).map((iv) => ({ iv, color: catColor(s.category) })));
+  renderPlanDial($('#planDial', root), items, actual, range, now);
   $('#planPrev', root).onclick = () => { const d = new Date(dayAnchor); d.setDate(d.getDate() - 1); dayAnchor = d.getTime(); renderPlan(); };
   $('#planNext', root).onclick = () => { const d = new Date(dayAnchor); d.setDate(d.getDate() + 1); dayAnchor = d.getTime(); renderPlan(); };
-  $$('.ag-item', root).forEach((b) => {
+  $$('[data-kind]', root).forEach((b) => {
     b.onclick = () => (b.dataset.kind === 'task' ? openTask(b.dataset.id) : openRoutineDay(b.dataset.id, isoDate(dayAnchor)));
   });
   $$('[data-task]', root).forEach((b) => { b.onclick = () => openTask(b.dataset.task); });
+  $$('[data-start]', root).forEach((b) => { b.onclick = () => startTask(b.dataset.start); });
+  $$('[data-rdone]', root).forEach((b) => { b.onclick = () => { haptic(15); act(store.setRoutineDone(b.dataset.rdone, isoDate(dayAnchor), true)); }; });
 }
 
 // ── week ───────────────────────────────────────────────────────────────────
