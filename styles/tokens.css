@@ -1,0 +1,73 @@
+/* Time Garden design tokens. Every screen draws from these; themes only override tokens. */
+
+@font-face{font-family:'DM Sans';font-weight:400;font-display:swap;src:url(../fonts/dm-sans-latin-ext-400-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'DM Sans';font-weight:400;font-display:swap;src:url(../fonts/dm-sans-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'DM Sans';font-weight:500;font-display:swap;src:url(../fonts/dm-sans-latin-ext-500-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'DM Sans';font-weight:500;font-display:swap;src:url(../fonts/dm-sans-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'DM Sans';font-weight:700;font-display:swap;src:url(../fonts/dm-sans-latin-ext-700-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'DM Sans';font-weight:700;font-display:swap;src:url(../fonts/dm-sans-latin-700-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'Caveat';font-weight:500;font-display:swap;src:url(../fonts/caveat-latin-ext-500-normal.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+1EF2-1EFF,U+20A0-20C0}
+@font-face{font-family:'Caveat';font-weight:500;font-display:swap;src:url(../fonts/caveat-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122}
+@font-face{font-family:'Parisienne';font-weight:400;font-display:swap;src:url(../fonts/parisienne-latin-400-normal.woff2) format('woff2')}
+
+:root{
+  /* type */
+  --font-ui:'DM Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-hand:'Caveat','Bradley Hand',cursive;
+  --font-script:'Parisienne','Snell Roundhand',cursive;
+  --fs-xs:11px; --fs-sm:13px; --fs-md:15px; --fs-lg:18px; --fs-xl:24px; --fs-2xl:34px;
+  /* space (4pt) */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:20px; --s6:28px;
+  /* radius */
+  --r-sm:12px; --r-md:18px; --r-lg:26px; --r-pill:999px;
+  /* motion */
+  --ease:cubic-bezier(.2,.7,.2,1); --t-fast:.14s; --t-med:.28s;
+  /* category colours — data colours, constant across themes */
+  --cat-work:#b3a2e6; --cat-learn:#f0a9c9; --cat-personal:#f6cfa6; --cat-social:#a9d8c4;
+  --cat-rest:#bcd6f2; --cat-sleep:#9aa6d8; --cat-home:#e8bfa0; --cat-other:#d6cbd9;
+  --secondary:#ef8fb4;
+}
+
+/* ── Theme A · Pearl Dream (default) ── */
+body, body[data-theme="pearl"]{
+  --bg:linear-gradient(165deg,#fdeef5 0%,#f6eafb 45%,#eee9fb 100%);
+  --bg-solid:#fbeef5;
+  --surface:rgba(255,255,255,.66);
+  --surface-strong:#fffafd;
+  --surface-sunk:rgba(244,230,244,.7);
+  --line:rgba(255,255,255,.9);
+  --line-soft:#f1dfec;
+  --ink:#4b3a57; --ink-soft:#8c7a97; --ink-faint:#b9a9c2;
+  --accent:#d88bb6; --accent-ink:#b0619a; --accent-2:#b3a2e6;
+  --on-accent:#fff;
+  --cta:linear-gradient(135deg,#f6bcd6,#c9b6f0);
+  --irid:linear-gradient(120deg,#ffe3ef,#eadcff 38%,#dcefff 68%,#ffeadd);
+  --shadow:0 10px 30px rgba(170,120,170,.16),0 1px 0 rgba(255,255,255,.9) inset;
+  --shadow-sm:0 4px 12px rgba(170,120,170,.14);
+  --blur:blur(14px);
+  --deco:block;
+  --track:#f1e3ef;
+}
+
+/* ── Theme B · Pure White ── */
+body[data-theme="white"]{
+  --bg:#fff; --bg-solid:#fff;
+  --surface:#fff; --surface-strong:#fff; --surface-sunk:#f6f6f7;
+  --line:#ececee; --line-soft:#ececee;
+  --ink:#1d1d1f; --ink-soft:#6e6e73; --ink-faint:#b0b0b5;
+  --accent:#1d1d1f; --accent-ink:#1d1d1f; --accent-2:#8e8e93;
+  --on-accent:#fff;
+  --cta:#1d1d1f;
+  --irid:#f6f6f7;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.05);
+  --shadow-sm:0 1px 3px rgba(0,0,0,.08);
+  --blur:none;
+  --deco:none;
+  --track:#efeff1;
+}
+
+/* ── Extra palettes carried over from v1 (accent variations of Pearl Dream) ── */
+body[data-theme="lavender"]{--bg:linear-gradient(165deg,#f3effc,#ebe6fa);--bg-solid:#f1ecfb;--accent:#9c8ad0;--accent-ink:#7d69b8;--accent-2:#c3b6ea;--cta:linear-gradient(135deg,#c9bdf0,#a898de);--line-soft:#e6def5;--track:#e9e2f6}
+body[data-theme="sunset"]{--bg:linear-gradient(165deg,#fff1ea,#fde7ee);--bg-solid:#fff0ea;--accent:#e39a8c;--accent-ink:#c2705f;--accent-2:#f3c3a8;--cta:linear-gradient(135deg,#f8c6a8,#eda3b1);--line-soft:#f6e0d6;--track:#f8e6dd}
+body[data-theme="nature"]{--bg:linear-gradient(165deg,#f1f7ef,#eaf2ee);--bg-solid:#f0f6ef;--accent:#86aa8c;--accent-ink:#5f8767;--accent-2:#b9d0b6;--cta:linear-gradient(135deg,#b9d6b8,#8fb79a);--line-soft:#dfeadd;--track:#e4eee2;--ink:#3f4a41;--ink-soft:#7b877d}
+body[data-theme="minimal"]{--bg:#f4f2f5;--bg-solid:#f4f2f5;--surface:#fff;--accent:#8f8494;--accent-ink:#6f6474;--accent-2:#c5bbc9;--cta:#8f8494;--irid:#eeebf0;--line-soft:#e8e4ea;--track:#ebe7ed;--deco:none;--blur:none}

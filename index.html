@@ -3,150 +3,203 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f7eaf2">
+<meta name="theme-color" content="#fbeef5">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Time Garden">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="styles.css">
-<title>Time Garden — Zaman Günlüğüm</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/app.css">
+<link rel="stylesheet" href="styles/journal.css">
+<title>Time Garden</title>
 <meta name="description" content="Zamanını keşfet, gününü yaratıcı bir günlükte sakla.">
 </head>
-<body>
-<div class="app-shell">
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark">✧</span><div><b>Time Garden</b><small>Zamanını güzelleştir</small></div></div>
-    <button class="icon-btn" id="todayBtn" aria-label="Bugüne dön">◷</button>
-  </header>
+<body data-theme="pearl">
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="irid" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffe6f1"/><stop offset=".35" stop-color="#eadcff"/>
+      <stop offset=".65" stop-color="#dcefff"/><stop offset="1" stop-color="#ffe9dc"/>
+    </linearGradient>
+    <radialGradient id="pearl" cx=".35" cy=".3" r=".8">
+      <stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#fbe4ef"/><stop offset="1" stop-color="#d9c4ee"/>
+    </radialGradient>
+    <symbol id="shell" viewBox="0 0 120 110">
+      <g fill="url(#irid)" stroke="#fff" stroke-width="1.6" stroke-opacity=".9">
+        <ellipse cx="60" cy="56" rx="11" ry="42" transform="rotate(-72 60 98)"/>
+        <ellipse cx="60" cy="56" rx="11" ry="42" transform="rotate(72 60 98)"/>
+        <ellipse cx="60" cy="52" rx="12" ry="46" transform="rotate(-54 60 98)"/>
+        <ellipse cx="60" cy="52" rx="12" ry="46" transform="rotate(54 60 98)"/>
+        <ellipse cx="60" cy="50" rx="12" ry="48" transform="rotate(-36 60 98)"/>
+        <ellipse cx="60" cy="50" rx="12" ry="48" transform="rotate(36 60 98)"/>
+        <ellipse cx="60" cy="49" rx="12" ry="49" transform="rotate(-18 60 98)"/>
+        <ellipse cx="60" cy="49" rx="12" ry="49" transform="rotate(18 60 98)"/>
+        <ellipse cx="60" cy="48" rx="12" ry="50"/>
+      </g>
+      <path d="M40 100q20 10 40 0l-6 8H46z" fill="url(#irid)" stroke="#fff" stroke-width="1.4"/>
+      <circle cx="60" cy="86" r="12" fill="url(#pearl)" stroke="#fff" stroke-width="1"/>
+      <circle cx="56" cy="82" r="3" fill="#fff" opacity=".9"/>
+    </symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11.5 12 4l8 7.5V20h-5.5v-5h-5v5H4z"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><rect x="4" y="12" width="4" height="8" rx="1.5"/><rect x="10" y="7" width="4" height="13" rx="1.5"/><rect x="16" y="3.5" width="4" height="16.5" rx="1.5"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.500-.5 6.500 0 8.500 1.500 2-1.500 5-2 8.500-1.500V5C17 4.500 14 5 12 6.500zm0 0v13"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.500a8.500 8.500 0 1 0 0 17c1.600 0 2-1 1.400-2-.7-1.300.1-2.500 1.600-2.500h2A3.500 3.500 0 0 0 20.500 12.500C20.500 7.500 16.700 3.500 12 3.500z"/><circle cx="8" cy="10" r="1"/><circle cx="12" cy="7.500" r="1"/><circle cx="16" cy="10" r="1"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.500 5 8 12l6.500 7"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M9.500 5 16 12l-6.500 7"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.500v13l10-6.500z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.500 5.500v13M15.500 5.500v13"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6.500" y="6.500" width="11" height="11" rx="2.500"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 20V5M5.500 11 12 4.500 18.500 11"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.500"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3c.6 4.500 2.500 6.400 7 7-4.500.6-6.400 2.500-7 7-.6-4.500-2.500-6.400-7-7 4.500-.6 6.400-2.500 7-7z"/></symbol>
+  </defs>
+</svg>
+
+<div class="app-shell">
   <main>
+    <!-- ───────────── HOME ───────────── -->
     <section class="screen active" id="homeScreen">
-      <div class="greeting"><div><p class="eyebrow" id="prettyDate"></p><h1>Merhaba, bugün nasılsın? <span>♡</span></h1><p class="muted">Zamanını yargılamadan keşfet.</p></div><div class="moon">☾</div></div>
-      <div class="hero-card">
-        <div class="hero-head"><span>BUGÜNÜN ZAMAN HARİTASI</span><button class="text-btn" data-go="calendar">Takvime git ↗</button></div>
-        <div class="clock-wrap"><div class="clock" id="clock"><div class="clock-center"><small>BUGÜN</small><strong>24</strong><small>SAAT</small></div></div></div>
-        <div class="legend" id="homeLegend"></div>
+      <header class="hero">
+        <svg class="hero-shell deco" aria-hidden="true"><use href="#shell"/></svg>
+        <h1 class="wordmark">Time Garden</h1>
+        <p class="hero-sub">Zaman · Rutin · Anı · Analiz</p>
+      </header>
+
+      <div class="tiles">
+        <button class="tile" data-go="calendar"><svg class="ic"><use href="#i-cal"/></svg><span>Takvim</span></button>
+        <button class="tile" data-go="analysis"><svg class="ic"><use href="#i-chart"/></svg><span>Analiz</span></button>
+        <button class="tile" id="tileJournal"><svg class="ic"><use href="#i-book"/></svg><span>Günlük Sayfa</span></button>
+        <button class="tile" data-go="theme"><svg class="ic"><use href="#i-palette"/></svg><span>Tema</span></button>
       </div>
-      <div class="live-session" id="liveSession" hidden>
-        <div><span class="live-dot"></span><small>ŞU ANDA DEVAM EDİYOR</small><b id="liveTaskName">Çalışma oturumu</b><strong id="liveElapsed">00:00:00</strong><p id="liveContextLabel">Ana etkinlik sürüyor</p><div id="liveContextList" class="live-context-list"></div></div>
-        <div class="live-actions"><button id="phoneStart" class="secondary-btn">＋ Paralel kayıt</button><button id="sessionPause" class="secondary-btn">Duraklat</button><button id="sessionStop" class="primary-btn">Bitir</button></div>
-      </div>
-      <div class="summary-grid">
-        <article class="mini-card"><span class="mini-icon">✦</span><small>Kayıtlı zaman</small><b id="loggedTime">0 sa 0 dk</b></article>
-        <article class="mini-card"><span class="mini-icon">♡</span><small>Etkinlik sayısı</small><b id="activityCount">0</b></article>
-      </div>
-      <div class="section-title"><div><h2>Bugünün akışı</h2><p class="muted">Gününden küçük parçalar</p></div><button class="pill-btn" id="quickAdd">＋ Ekle</button></div>
-      <div class="activity-list" id="todayList"></div>
-      <div class="soft-note"><span>🌷</span><div><b>Boş zaman da zamandır.</b><p>Her dakikayı doldurmak zorunda değilsin.</p></div></div>
+
+      <section class="card live" id="liveCard" aria-live="polite"></section>
+
+      <section class="card today">
+        <div class="card-head"><h2 id="todayTitle">Bugün</h2><span class="chip quiet" id="todayRemain"></span></div>
+        <div class="dial-wrap">
+          <svg id="dial" class="dial" viewBox="-14 -14 268 268" role="img" aria-label="Bugünün 24 saatlik zaman haritası"></svg>
+          <div class="dial-center"><strong id="dialValue">0 dk</strong><small id="dialLabel">kayıtlı</small></div>
+        </div>
+        <ul class="legend" id="todayLegend"></ul>
+        <div class="stat-row" id="todayStats"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><h2>Bugünün akışı</h2><button class="btn ghost sm" id="addPast">＋ Geçmiş kayıt</button></div>
+        <div class="flow" id="todayFlow"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><h2>Bu hafta</h2><button class="btn ghost sm" data-go="calendar">Takvim</button></div>
+        <div class="week-strip" id="weekStrip"></div>
+      </section>
     </section>
 
+    <!-- ───────────── CALENDAR ───────────── -->
     <section class="screen" id="calendarScreen">
-      <div class="page-heading"><p class="eyebrow">ZAMANININ TAKVİMİ</p><h1>Takvim</h1></div>
+      <header class="bar"><button class="icon-btn" data-go="home" aria-label="Geri"><svg class="ic"><use href="#i-back"/></svg></button><h1><svg class="ic"><use href="#i-cal"/></svg>Takvim</h1><span class="bar-end"><svg class="mini-shell deco"><use href="#shell"/></svg></span></header>
       <div class="segmented" id="calendarModes">
         <button class="selected" data-mode="month">Aylık</button><button data-mode="week">Haftalık</button><button data-mode="year">Yıllık</button>
       </div>
-      <div class="month-nav"><button class="round-btn" id="prevPeriod">‹</button><div><b id="periodTitle"></b><small id="periodSub"></small></div><button class="round-btn" id="nextPeriod">›</button></div>
+      <div class="period-nav"><button class="icon-btn sm" id="prevPeriod" aria-label="Önceki"><svg class="ic"><use href="#i-back"/></svg></button><div><b id="periodTitle"></b><small id="periodSub"></small></div><button class="icon-btn sm" id="nextPeriod" aria-label="Sonraki"><svg class="ic"><use href="#i-next"/></svg></button></div>
       <div id="calendarContent"></div>
-      <div class="calendar-summary" id="calendarSummary"></div>
-      <p class="hint">Bir güne dokunarak o günün zaman günlüğünü açabilirsin.</p>
+      <section class="card" id="calendarSummary"></section>
+      <p class="hint">Bir güne dokununca o günün günlük sayfası açılır.</p>
     </section>
 
+    <!-- ───────────── JOURNAL ───────────── -->
     <section class="screen" id="journalScreen">
-      <div class="page-heading journal-heading"><div><p class="eyebrow">KİŞİSEL ANI DEFTERİN</p><h1 id="journalDate">Günlük sayfan</h1></div><button class="pill-btn" id="savePage">Kaydet</button></div>
+      <header class="bar"><button class="icon-btn" data-go="calendar" aria-label="Geri"><svg class="ic"><use href="#i-back"/></svg></button><h1><svg class="ic"><use href="#i-book"/></svg>Günlük Sayfa</h1><span class="bar-end save-state" id="saveState"></span></header>
+      <div class="period-nav"><button class="icon-btn sm" id="prevDay" aria-label="Önceki gün"><svg class="ic"><use href="#i-back"/></svg></button><div><b id="journalDate"></b><small id="journalTime"></small></div><button class="icon-btn sm" id="nextDay" aria-label="Sonraki gün"><svg class="ic"><use href="#i-next"/></svg></button></div>
       <div class="journal-tools">
-        <label class="tool-btn">▧ Fotoğraf<input type="file" id="photoInput" accept="image/*" hidden></label>
-        <button class="tool-btn" id="addText">T Metin</button><button class="tool-btn" id="drawToggle">✎ El yazısı</button>
-        <button class="tool-btn" id="stickerToggle">✧ Çıkartma</button><button class="tool-btn" id="openStudio">♡ Sticker atölyesi</button><button class="tool-btn" id="decorToggle">⌗ Çizgi / nokta</button>
+        <label class="tool-btn">Fotoğraf<input type="file" id="photoInput" accept="image/*" hidden></label>
+        <button class="tool-btn" id="addText">Metin</button><button class="tool-btn" id="drawToggle">El yazısı</button>
+        <button class="tool-btn" id="stickerToggle">Çıkartma</button><button class="tool-btn" id="decorToggle">Çizgi / nokta</button><button class="tool-btn" id="openStudio">Sticker atölyesi</button>
       </div>
       <div class="sticker-tray" id="stickerTray" hidden>
         <button data-sticker="⌛">⌛</button><button data-sticker="💎">💎</button><button data-sticker="💗">💗</button><button data-sticker="🌙">🌙</button><button data-sticker="🪄">🪄</button><button data-sticker="🧁">🧁</button><button data-sticker="🦋">🦋</button><button data-sticker="⭐">⭐</button><button data-sticker="🐚">🐚</button>
       </div>
       <div class="decor-tray" id="decorTray" hidden><button data-decor="line">Uzun çizgi</button><button data-decor="dots">Noktalar</button><button data-decor="star">Yıldız</button><button data-decor="tape">Şerit</button></div>
-      <div class="object-toolbar" id="objectToolbar" hidden><span id="selectedLabel">Nesne seçildi</span><button id="objectSmaller">−</button><button id="objectBigger">＋</button><button id="objectRotate">↻</button><button id="objectFront">Öne al</button><button id="objectBack">Arkaya al</button><button id="objectEdit">Düzenle</button><button id="objectDelete">Sil</button></div>
-      <div class="washi-tray"><span>WASHI</span><button class="washi pink" data-washi="pink"></button><button class="washi lilac" data-washi="lilac"></button><button class="washi gold" data-washi="gold"></button><button class="washi mint" data-washi="mint"></button></div>
+      <div class="washi-tray"><span>WASHI</span><button class="washi pink" data-washi="pink" aria-label="Pembe washi"></button><button class="washi lilac" data-washi="lilac" aria-label="Lila washi"></button><button class="washi gold" data-washi="gold" aria-label="Altın washi"></button><button class="washi mint" data-washi="mint" aria-label="Nane washi"></button></div>
+      <div class="object-toolbar" id="objectToolbar" hidden><span>Nesne seçildi</span><button id="objectSmaller">−</button><button id="objectBigger">＋</button><button id="objectRotate">↻</button><button id="objectFront">Öne al</button><button id="objectBack">Arkaya al</button><button id="objectEdit">Düzenle</button><button id="objectDelete">Sil</button></div>
       <div class="paper-stack">
+        <div class="rings" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
         <div class="paper" id="paper">
-          <div class="paper-date"><span id="paperDate">10</span><small id="paperMonth">Kasım 2026</small></div>
+          <div class="paper-date"><span id="paperDate"></span><small id="paperMonth"></small></div>
           <div class="paper-content" id="paperContent">
-            <textarea id="journalNote" placeholder="Bugün neler oldu? Aklından neler geçti? Buraya yaz..."></textarea>
+            <textarea id="journalNote" placeholder="Bugün neler oldu? Buraya yaz…"></textarea>
             <div id="canvasItems"></div>
-            <svg id="drawSvg" aria-label="El yazısı çizim alanı"></svg>
           </div>
-          <div class="paper-footer">Bugünden sana kalan küçük bir anı ♡</div>
         </div>
       </div>
-      <div class="page-actions"><button class="secondary-btn" id="prevDay">← Önceki gün</button><button class="primary-btn" id="tearPage">Yukarı çek · Sayfayı kopar ↑</button><button class="secondary-btn" id="nextDay">Sonraki gün →</button></div>
-      <p class="hint">Fotoğrafları, metinleri ve çıkartmaları sayfa üzerinde sürükleyebilirsin. Sayfa bu cihazda saklanır.</p>
+      <button class="tear-handle" id="tearHandle" aria-label="Yukarı çek ve yaprağı kopar"><svg class="ic"><use href="#i-up"/></svg><span>Yukarı çek ve yaprağı kopar</span></button>
     </section>
 
+    <!-- ───────────── ANALYSIS ───────────── -->
     <section class="screen" id="analysisScreen">
-      <div class="page-heading"><p class="eyebrow">KENDİNİ TANI</p><h1>Zaman analizi</h1></div>
+      <header class="bar"><button class="icon-btn" data-go="home" aria-label="Geri"><svg class="ic"><use href="#i-back"/></svg></button><h1><svg class="ic"><use href="#i-chart"/></svg>Zaman Analizi</h1><span class="bar-end"></span></header>
       <div class="segmented" id="analysisModes"><button class="selected" data-range="day">Gün</button><button data-range="week">Hafta</button><button data-range="month">Ay</button><button data-range="year">Yıl</button></div>
-      <div class="analysis-total"><small>SEÇİLİ DÖNEMDE KAYITLI ZAMAN</small><strong id="analysisTotal">0 sa 0 dk</strong><div class="bar" id="analysisBar"></div></div>
-      <div class="section-title"><div><h2>Zamanın nereye gidiyor?</h2><p class="muted">Kayıtlarına göre kategori dağılımı</p></div></div>
-      <div id="categoryBreakdown" class="breakdown"></div>
-      <div class="section-title"><div><h2>Paralel telefon / uygulama kullanımı</h2><p class="muted">Çalışma oturumlarınla çakışan kullanım kayıtları</p></div></div><div id="contextBreakdown" class="breakdown"></div>
-      <div class="insight-card"><span>✧</span><div><b>Minik içgörü</b><p id="insightText">Kayıt ekledikçe zaman örüntülerin burada görünür.</p></div></div>
-      <div class="section-title"><div><h2>Rutinlerini keşfet</h2><p class="muted">Tekrarlayan başlangıç saatleri</p></div></div>
-      <div id="routineBox" class="routine-box">Henüz yeterli veri yok. Birkaç gün kayıt tuttuktan sonra sabah ve çalışma rutinlerini burada görebileceksin.</div>
-      <div class="screen-time-card"><div class="screen-icon">▣</div><div><b>Apple Ekran Süresi</b><p>iPhone kullanımını da analiz etmek ister misin?</p><small>Web uygulaması iOS Ekran Süresi verisini doğrudan okuyamaz. İzin akışı, yerel iOS sürümünde Apple'ın Screen Time API'leriyle kurulabilir.</small></div><button class="secondary-btn" id="screenInfo">Bilgi</button></div>
+      <div class="period-nav"><button class="icon-btn sm" id="prevAnalysis" aria-label="Önceki"><svg class="ic"><use href="#i-back"/></svg></button><div><b id="analysisTitle"></b><small id="analysisSub"></small></div><button class="icon-btn sm" id="nextAnalysis" aria-label="Sonraki"><svg class="ic"><use href="#i-next"/></svg></button></div>
+      <div id="analysisBody"></div>
+      <section class="card screen-time">
+        <span class="badge-ic"><svg class="ic"><use href="#i-phone"/></svg></span>
+        <div><b>Ekran Süresi <span class="chip quiet">Bağlı değil</span></b>
+        <p>Bir web uygulaması iPhone'daki diğer uygulamaları veya Ekran Süresi'ni okuyamaz. Bu, ileride yerel bir iOS eşlikçi uygulamasıyla mümkün; o zamana kadar telefon kullanımını paralel kayıt olarak elle işaretleyebilirsin.</p></div>
+      </section>
     </section>
 
+    <!-- ───────────── THEMES ───────────── -->
     <section class="screen" id="themeScreen">
-      <div class="page-heading"><p class="eyebrow">KENDİ ALANINI YARAT</p><h1>Tema & deneyim</h1></div>
-      <h2 class="subheading">Renk dünyanı seç</h2>
-      <div class="theme-grid">
-        <button class="theme-option chosen" data-theme="pearl"><span class="swatches pearl-sw"></span><b>Sedef Bahçesi</b><small>Yumuşak ve ışıltılı</small></button>
-        <button class="theme-option" data-theme="lavender"><span class="swatches lavender-sw"></span><b>Lavanta</b><small>Sakin ve dingin</small></button>
-        <button class="theme-option" data-theme="sunset"><span class="swatches sunset-sw"></span><b>Gün Batımı</b><small>Sıcak ve yumuşak</small></button>
-        <button class="theme-option" data-theme="nature"><span class="swatches nature-sw"></span><b>Doğa</b><small>Toprak ve adaçayı</small></button>
-        <button class="theme-option" data-theme="minimal" ><span class="swatches minimal-sw"></span><b>Minimal</b><small>Az ve öz</small></button>
-        <button class="theme-option" data-theme="white"><span class="swatches white-sw"></span><b>Beyaz</b><small>Tamamen temiz</small></button>
+      <header class="bar"><button class="icon-btn" data-go="home" aria-label="Geri"><svg class="ic"><use href="#i-back"/></svg></button><h1><svg class="ic"><use href="#i-palette"/></svg>Tema</h1><span class="bar-end"></span></header>
+      <div class="theme-grid" id="themeGrid">
+        <button class="theme-option" data-theme="pearl"><span class="sw sw-pearl"></span><b>Sedef Bahçe</b><small>Sedef pembe ve lavanta</small></button>
+        <button class="theme-option" data-theme="white"><span class="sw sw-white"></span><b>Beyaz</b><small>Tamamen temiz</small></button>
+        <button class="theme-option" data-theme="lavender"><span class="sw sw-lavender"></span><b>Lavanta</b><small>Sakin ve dingin</small></button>
+        <button class="theme-option" data-theme="sunset"><span class="sw sw-sunset"></span><b>Gün Batımı</b><small>Sıcak ve yumuşak</small></button>
+        <button class="theme-option" data-theme="nature"><span class="sw sw-nature"></span><b>Doğa</b><small>Adaçayı ve toprak</small></button>
+        <button class="theme-option" data-theme="minimal"><span class="sw sw-minimal"></span><b>Minimal</b><small>Az ve öz</small></button>
       </div>
-      <div class="settings-card"><div><b>Çıkartma koleksiyonu</b><p>Günlük sayfalarında kullanabileceğin küçük detaylar.</p></div><button class="pill-btn" data-go="journal">Aç ↗</button></div>
-      <div class="settings-card"><div><b>Verilerini dışa aktar</b><p>Kayıtlarını JSON dosyası olarak indir.</p></div><button class="pill-btn" id="exportData">Dışa aktar</button></div>
-      <div class="settings-card"><div><b>Verilerini içe aktar</b><p>Daha önce dışa aktardığın yedeği geri yükle.</p></div><label class="pill-btn">İçe aktar<input type="file" id="importData" accept="application/json" hidden></label></div>
-      <div class="settings-card"><div><b>Bu cihazda saklama</b><p>Kayıtların hesabın olmadan bu tarayıcıda tutulur.</p></div><span class="privacy-badge">Yerel</span></div>
+      <h2 class="section-h">Verilerin</h2>
+      <div class="card row"><div><b>Bu cihazda saklanır</b><p id="storageInfo">Kayıtların hesap olmadan, yalnızca bu cihazda tutulur.</p></div><span class="chip">Yerel</span></div>
+      <div class="card row"><div><b>Yedek al</b><p>Tüm kayıtlarını tek bir JSON dosyası olarak indir.</p></div><button class="btn sm" id="exportData">Dışa aktar</button></div>
+      <div class="card row"><div><b>Yedekten geri yükle</b><p>Mevcut kayıtların yerine yedektekiler gelir.</p></div><label class="btn ghost sm">İçe aktar<input type="file" id="importData" accept="application/json,.json" hidden></label></div>
+      <p class="hint" id="versionInfo"></p>
     </section>
   </main>
 
-  <nav class="bottom-nav">
-    <button class="nav-item active" data-screen="home"><span>⌂</span><small>Ana sayfa</small></button>
-    <button class="nav-item" data-screen="calendar"><span>▦</span><small>Takvim</small></button>
-    <button class="nav-add" id="navAdd">＋</button>
-    <button class="nav-item" data-screen="analysis"><span>◫</span><small>Analiz</small></button>
-    <button class="nav-item" data-screen="theme"><span>✧</span><small>Tema</small></button>
+  <nav class="bottom-nav" aria-label="Ana gezinme">
+    <button class="nav-item active" data-screen="home"><svg class="ic"><use href="#i-home"/></svg><small>Ana sayfa</small></button>
+    <button class="nav-item" data-screen="calendar"><svg class="ic"><use href="#i-cal"/></svg><small>Takvim</small></button>
+    <button class="nav-add" id="navAdd" aria-label="Yeni kayıt"><svg class="ic"><use href="#i-plus"/></svg></button>
+    <button class="nav-item" data-screen="analysis"><svg class="ic"><use href="#i-chart"/></svg><small>Analiz</small></button>
+    <button class="nav-item" data-screen="theme"><svg class="ic"><use href="#i-palette"/></svg><small>Tema</small></button>
   </nav>
 </div>
 
-<div class="modal-backdrop" id="activityModal" hidden>
-  <form class="modal" id="activityForm">
-    <div class="modal-head"><div><p class="eyebrow">ZAMANINA BİR NOT</p><h2>Etkinlik ekle</h2></div><button type="button" class="close-btn" id="closeModal">×</button></div>
-    <label>Şu anda ne yapacaksın?<input id="activityName" required placeholder="Örn. LabOS üzerinde çalışacağım"></label>
-    <div class="timer-explainer">Başlat'a bastığında süre gerçek zamanlı ölçülür. Çalışırken telefon kullanımını ayrıca işaretleyebilirsin; ana çalışma oturumu durmaz.</div>
-    <button type="button" class="primary-btn full" id="startTimer">▶ Zamanı şimdi başlat</button>
-    <div class="modal-divider"><span>veya</span></div>
-    <div class="form-row"><label>Başlangıç<input type="time" id="startTime" required value="09:00"></label><label>Bitiş<input type="time" id="endTime" required value="10:00"></label></div>
-    <label>Kategori<select id="activityCategory"><option>Çalışma</option><option>Öğrenme</option><option>Kişisel</option><option>Sosyal</option><option>Dinlenme</option><option>Uyku</option><option>Ev işleri</option><option>Diğer</option></select></label>
-    <label>Not (isteğe bağlı)<textarea id="activityMemo" rows="2" placeholder="Küçük bir ayrıntı..."></textarea></label>
-    <div class="timer-explainer">Geçmişte yaptığın bir etkinliği kaydetmek için aşağıdaki alanları kullan.</div>
-    <button class="primary-btn full" type="submit">Kaydı ekle ♡</button>
-  </form>
-</div>
+<!-- Bottom sheet used for create / edit forms -->
+<div class="sheet-backdrop" id="sheet" hidden><div class="sheet" role="dialog" aria-modal="true" id="sheetBody"></div></div>
 
-<div class="modal-backdrop" id="studioModal" hidden>
- <section class="modal studio-modal">
-  <div class="modal-head"><div><p class="eyebrow">MY STICKER ATELIER</p><h2>Fotoğrafını çıkartmaya dönüştür</h2></div><button type="button" class="close-btn" id="closeStudio">×</button></div>
-  <label class="studio-upload">▧ Fotoğraf çek veya galeriden seç<input type="file" id="studioPhoto" accept="image/*" capture="environment" hidden></label>
-  <div class="studio-preview-wrap"><canvas id="stickerCanvas" width="480" height="480"></canvas><p id="studioHint">Bir fotoğraf seç; koleksiyonunu belirle ve çıkartmanı oluştur.</p></div>
-  <label>Koleksiyon / washi stili<select id="stickerStyle"><option value="pink">Pink Dream · pembe, kurdele, kalp</option><option value="moon">Moon Garden · ay, yıldız, sedef</option><option value="botanical">Botanical · yaprak, çiçek, doğal</option><option value="pixel">Pixel World · piksel ve oyun</option><option value="lilac">Lavender Haze · lila, inci, bulut</option></select></label>
-  <label>Emoji etiketi<input id="stickerEmoji" maxlength="4" value="💗" placeholder="Örn. 🐚"></label>
-  <div class="studio-actions"><button class="secondary-btn" id="makeSticker" type="button">Çıkartma oluştur</button><button class="primary-btn" id="saveSticker" type="button" disabled>PNG olarak indir</button></div>
-  <p class="studio-disclaimer">Not: Bu sürüm fotoğrafı washi çerçevesi, beyaz çıkartma konturu ve gölgeyle işler. Gerçek arka plan silme ve yapay zekâ ile GIF üretimi için ayrıca görüntü işleme modeli/servisi gerekir; bu ekranda varmış gibi sunulmuyor.</p>
+<!-- Sticker Atelier (unchanged feature set; rebuilt in a later phase) -->
+<div class="sheet-backdrop" id="studioModal" hidden>
+ <section class="sheet studio-modal" role="dialog" aria-modal="true">
+  <div class="sheet-head"><h2>Sticker Atölyesi</h2><button type="button" class="icon-btn sm" id="closeStudio" aria-label="Kapat"><svg class="ic"><use href="#i-close"/></svg></button></div>
+  <label class="studio-upload">Fotoğraf çek veya galeriden seç<input type="file" id="studioPhoto" accept="image/*" hidden></label>
+  <div class="studio-preview-wrap"><canvas id="stickerCanvas" width="480" height="480"></canvas><p id="studioHint">Bir fotoğraf seç, koleksiyonunu belirle ve çıkartmanı oluştur.</p></div>
+  <label class="field">Koleksiyon<select id="stickerStyle"><option value="pink">Pink Dream</option><option value="moon">Moon Garden</option><option value="botanical">Botanical</option><option value="pixel">Pixel World</option><option value="lilac">Lavender Haze</option></select></label>
+  <label class="field">Emoji etiketi<input id="stickerEmoji" maxlength="4" value="💗"></label>
+  <div class="studio-actions"><button class="btn ghost" id="makeSticker" type="button">Çıkartma oluştur</button><button class="btn" id="saveSticker" type="button" disabled>PNG indir ve sayfaya ekle</button></div>
+  <p class="hint">Bu sürüm fotoğrafı washi çerçeveli bir PNG'ye yerleştirir. Arka plan silme, emoji ve GIF üretimi henüz yok.</p>
  </section>
 </div>
-<div class="toast" id="toast"></div>
-<script src="app.js"></script>
+
+<div class="toast" id="toast" role="status"></div>
+<script type="module" src="src/main.js"></script>
 </body>
 </html>

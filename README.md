@@ -1,37 +1,74 @@
-# Time Garden — v1.1
+# Time Garden — v2.0
 
-Mobile-first, local-first time journal PWA.
-
-## Run locally
-
-Serve this folder over HTTP (service workers require localhost or HTTPS):
+Mobile-first, local-first time journal PWA. No build step: the repository root is the deployed site.
 
 ```bash
-python -m http.server 8080
+npm test                 # unit tests for the time calculations (Node 20+)
+python3 -m http.server 8080   # then open http://localhost:8080
 ```
 
-Open `http://localhost:8080`.
+## Structure
 
-## Implemented in this build
+```
+index.html            app shell, screens, SVG icon sprite
+styles/tokens.css     design tokens + themes (Pearl Dream, Pure White, 4 extra palettes)
+styles/app.css        shared components and screens
+styles/journal.css    journal sheet + Sticker Atelier
+src/core/             business logic, no DOM
+  time.js             interval maths: union / intersect / subtract, day summaries
+  tracker.js          session + event state transitions and validation
+  analytics.js        day / week / month / year analysis
+  migrate.js          schema versions, v1 → v2 migration, import validation
+  db.js               IndexedDB wrapper
+  store.js            in-memory state + the only code that writes to the database
+src/ui/               one module per screen, plus sheets, dial, router
+sw.js                 offline app shell (bump VERSION on each release)
+tests/                node:test unit tests
+```
 
-- Pearl Dream and Pure White themes plus additional palettes.
-- Monthly, weekly and yearly calendar views.
-- Daily scrapbook page with photos, text, emoji stickers, washi strips, decorative marks and freehand SVG drawing.
-- Selectable page objects with drag, resize, rotate, layer ordering, edit and delete controls.
-- Touch pull gesture that follows the finger and triggers the page-tear transition on release.
-- Real timestamp-based primary timer with persistence across reloads, pause/resume, and multiple independently stoppable concurrent context intervals.
-- Context intervals are recorded as overlapping annotations and are not added to primary elapsed time.
-- Local JSON export/import.
-- Photo-to-washi PNG composition in Sticker Atelier.
-- PWA manifest and offline shell cache.
+## Data model (schema 2, IndexedDB `time-garden`)
 
-## Honest limitations
+| Store | Key | Record |
+|---|---|---|
+| `sessions` | `id` | Primary activity: `name, category, startedAt, endedAt, pauses[{start,end}], note, source` |
+| `events` | `id` | Secondary / concurrent activity: `label, attention(active\|background), startedAt, endedAt, sessionId, source` |
+| `pages` | `date` | Journal page (v1 HTML model for now): `note, items, draw` |
+| `kv` | `key` | `settings`, `schema`, migration markers, pre-import backup |
 
-- A browser PWA cannot read iOS Screen Time or inspect other apps. Automatic app-usage capture requires a native iOS companion and Apple's Screen Time APIs/entitlements.
-- Sticker Atelier currently composes an imported image into a washi-style PNG. It does not yet perform AI subject segmentation/background removal or generative restyling.
-- Animated GIF generation is not included in this build. A valid GIF encoder or server-side image pipeline is required; a static PNG is never mislabeled as a GIF.
-- Data is currently stored in browser localStorage. Large image-heavy journals should migrate to IndexedDB before extensive use.
+`source` is `timer` (both ends stamped by the clock) or `manual` (typed or edited by hand).
+Durations are never stored; they are derived from timestamps, so a reload, backgrounding or
+device sleep cannot make the timer drift.
+
+Overlap rules (`time.js → summarize`):
+
+- **Primary time** = union of running primary intervals (pauses removed).
+- **Secondary time** = plain sum of each event's length; reported separately, may exceed wall time.
+- **Concurrent time** = wall time where an event overlaps a running primary.
+- **Unique elapsed** = union of everything; this is the "tracked time" figure.
+- **Focus** = primary time with no attention-taking event on top (background events such as music do not count).
+
+A native iOS companion can write `events` with a new `source` value into the same model.
+
+## Status
+
+Working and tested: timestamp timer with pause/resume, overlapping secondary events, editing
+and retrospective entry, 24-hour dial, month/week/year calendar, day/week/month/year analysis,
+journal save/autosave, tear-off drag gesture, themes, JSON backup/restore, offline shell.
+
+Not built yet: object canvas for the journal (handles, undo/redo, layers, locking), sticker
+library, background removal, emoji and GIF generation, native Screen Time integration.
+
+## iOS Screen Time
+
+A web app cannot read Screen Time or see other apps. Automatic app-usage data needs a native
+iOS app using FamilyControls (user authorisation plus an Apple-granted entitlement for
+distribution) and DeviceActivity. Usage details are rendered inside a sandboxed report
+extension, so exporting per-app minutes into this data model may not be possible; verify
+against current Apple documentation before committing to that design.
 
 ## Data safety
 
-Use **Tema → Verilerini dışa aktar** regularly. Browser storage can be cleared by the user or the operating system.
+Everything stays in this browser's IndexedDB. Use **Tema → Yedek al** regularly; the OS can
+evict site storage. The old v1 `localStorage` blob is migrated on first run and left in place.
+
+Fonts: DM Sans, Caveat, Parisienne (SIL Open Font License, see `fonts/`).
