@@ -31,17 +31,19 @@ function monthView(now) {
 function weekView(now) {
   const [ws, we] = periodRange('week', anchor);
   const today = isoDate(now);
-  const rows = WEEKDAYS.map((name, i) => {
+  const cells = WEEKDAYS.map((w) => `<div class="weekday">${w}</div>`).join('') + WEEKDAYS.map((name, i) => {
     const d = new Date(ws); d.setDate(d.getDate() + i);
-    const ts = d.getTime(), iso = isoDate(ts), s = ts > now ? null : daySum(ts, now);
-    const bar = s && s.primaryMs ? Object.entries(s.byCategory).map(([c, ms]) => `<i style="--c:${catColor(c)};width:${(ms / DAY) * 100}%"></i>`).join('') : '';
-    return `<button class="week-row${iso === today ? ' today' : ''}" data-day="${iso}"><span><small>${name}</small><br><b>${d.getDate()}</b></span>
-      <span class="mini-bar">${bar}</span><small>${s && s.uniqueMs ? fmtDur(s.uniqueMs) : '—'}${store.getPage(iso) ? ' ✎' : ''}</small></button>`;
+    const ts = d.getTime(), iso = isoDate(ts), ms = ts > now ? 0 : daySum(ts, now).uniqueMs;
+    return `<button class="day-cell${ms ? ' has' : ''}${iso === today ? ' today' : ''}" style="--lvl:${level(ms)}" data-day="${iso}" aria-label="${name} ${d.getDate()}${ms ? ', ' + fmtDur(ms) : ''}">${d.getDate()}${store.getPage(iso) ? '<span class="mark"></span>' : ''}</button>`;
+  }).join('') + WEEKDAYS.map((_, i) => {
+    const d = new Date(ws); d.setDate(d.getDate() + i);
+    const ms = d.getTime() > now ? 0 : daySum(d.getTime(), now).uniqueMs;
+    return `<div class="weekday under">${ms ? (ms >= 3_600_000 ? `${Math.floor(ms / 3_600_000)}:${String(Math.round((ms % 3_600_000) / 60_000) % 60).padStart(2, '0')}` : fmtDur(ms)) : '—'}</div>`;
   }).join('');
   const last = new Date(we - 1);
   $('#periodTitle').textContent = weekTitle(ws, we);
   $('#periodSub').textContent = String(last.getFullYear());
-  return `<div class="week-list">${rows}</div>`;
+  return `<div class="cal-grid">${cells}</div>`;
 }
 
 function yearView(now) {

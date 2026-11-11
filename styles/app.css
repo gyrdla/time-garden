@@ -128,6 +128,7 @@ body[data-theme="white"] .wordmark,body[data-theme="minimal"] .wordmark{font:700
 .day-cell.has{background:color-mix(in srgb,var(--accent-2) calc(var(--lvl) * 60%),var(--surface-strong))}
 .day-cell.today{border:1.5px solid var(--accent-ink);font-weight:700}
 .day-cell .mark{position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:var(--accent-ink)}
+.weekday.under{padding:2px 0 0;font-size:10px;font-variant-numeric:tabular-nums}
 .week-list{display:grid;gap:var(--s2);margin-bottom:var(--s4)}
 .week-row{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:var(--s3);min-height:52px;padding:var(--s2) var(--s4);border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);text-align:left;width:100%}
 .week-row.today{border-color:var(--accent)}

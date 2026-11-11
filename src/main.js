@@ -9,7 +9,7 @@ import { renderAnalysis, bindAnalysis } from './ui/analysis.js';
 import { renderJournal, bindJournal } from './ui/journal.js';
 import { renderThemes, bindThemes, applyTheme } from './ui/themes.js';
 import { bindSheets, openCreateMenu } from './ui/sheets.js';
-import { renderPlan, bindPlan } from './ui/plan.js';
+import { renderPlan, bindPlan, tickPlan } from './ui/plan.js';
 
 // Paint the last theme immediately so there is no flash before the database opens.
 try { const t = localStorage.getItem('tg-theme'); if (t) document.body.dataset.theme = t; } catch { /* private mode */ }
@@ -35,7 +35,7 @@ async function boot() {
   go('home');
 
   // The clock is derived from timestamps, so these only repaint; they never "count".
-  setInterval(() => { if (!document.hidden && view.screen === 'home') tickHome(); }, 1000);
+  setInterval(() => { if (document.hidden) return; if (view.screen === 'home') tickHome(); else if (view.screen === 'plan') tickPlan(); }, 1000);
   setInterval(() => { if (!document.hidden && view.screen === 'home') renderHome(); }, 30_000);
   const wake = () => { if (!document.hidden && view.screen !== 'journal') refresh(); };
   document.addEventListener('visibilitychange', wake);
@@ -46,5 +46,9 @@ async function boot() {
 boot().catch((e) => { console.error(e); toast('Uygulama başlatılamadı. Sayfayı yenilemeyi dene.'); });
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  // When a new version takes over, reload once so the page never runs old code against new files.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').then((r) => r.update()).catch(() => {}));
 }

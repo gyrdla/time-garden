@@ -92,11 +92,6 @@
         <div class="stat-row" id="todayStats"></div>
       </section>
 
-      <section class="block" id="upNextBlock" hidden>
-        <div class="block-head"><h2>Sıradaki</h2><button class="btn ghost sm" data-go="plan">Plan</button></div>
-        <div class="flow" id="upNext"></div>
-      </section>
-
       <section class="block">
         <div class="block-head"><h2>Bugünün akışı</h2><button class="btn ghost sm" id="addPast">＋ Geçmiş kayıt</button></div>
         <div class="flow" id="todayFlow"></div>
@@ -111,7 +106,7 @@
     <!-- ───────────── PLAN ───────────── -->
     <section class="screen" id="planScreen">
       <header class="bar"><button class="icon-btn" data-go="home" aria-label="Geri"><svg class="ic"><use href="#i-back"/></svg></button><h1><svg class="ic"><use href="#i-spark"/></svg>Plan</h1><span class="bar-end"></span></header>
-      <div class="segmented" id="planTabs"><button class="selected" data-tab="day">Gün</button><button data-tab="week">Hafta</button><button data-tab="projects">Projeler</button></div>
+      <div class="segmented" id="planTabs"><button class="selected" data-tab="day">Gün</button><button data-tab="week">Hafta</button><button data-tab="month">Ay</button><button data-tab="year">Yıl</button><button data-tab="projects">Projeler</button></div>
       <div id="planBody"></div>
     </section>
 
@@ -124,7 +119,7 @@
       <div class="period-nav"><button class="icon-btn sm" id="prevPeriod" aria-label="Önceki"><svg class="ic"><use href="#i-back"/></svg></button><div><b id="periodTitle"></b><small id="periodSub"></small></div><button class="icon-btn sm" id="nextPeriod" aria-label="Sonraki"><svg class="ic"><use href="#i-next"/></svg></button></div>
       <div id="calendarContent"></div>
       <section class="card" id="calendarSummary"></section>
-      <p class="hint">Bir güne dokununca o günün günlük sayfası açılır.</p>
+      <p class="hint">Bu takvim ölçülen zamanı ve günlük sayfalarını gösterir; bir güne dokununca günlük sayfası açılır. Görevlerin takvimi Plan ekranında.</p>
     </section>
 
     <!-- ───────────── JOURNAL ───────────── -->

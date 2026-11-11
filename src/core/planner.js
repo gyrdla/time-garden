@@ -28,10 +28,10 @@ export function newProject({ name, area = '', category = 'Çalışma', note = ''
     category: CATEGORIES.includes(category) ? category : 'Diğer', note: String(note || ''), archived: false, createdAt: now, updatedAt: now };
 }
 
-export function newTask({ projectId, parentId = null, title, how = '', estimateMin = null, scheduledAt = null, dependsOn = null, parallel = false, order = 0 }, now = Date.now()) {
+export function newTask({ projectId, parentId = null, title, how = '', estimateMin = null, scheduledAt = null, dependsOn = null, parallel = false, order = 0, plannedDay = null }, now = Date.now()) {
   if (!projectId) throw new ValidationError('Görev bir projeye bağlı olmalı.');
   return { id: uid(), projectId, parentId, title: need(title, 'Görev adı'), how: String(how || ''), estimateMin: minutes(estimateMin),
-    scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : null, dependsOn, parallel: !!parallel, done: false, doneAt: null, order, createdAt: now, updatedAt: now };
+    scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : null, plannedDay: Number.isFinite(scheduledAt) ? isoDate(scheduledAt) : (plannedDay || null), dependsOn, parallel: !!parallel, done: false, doneAt: null, order, createdAt: now, updatedAt: now };
 }
 
 export function editTask(task, patch, tasks, now = Date.now()) {
@@ -39,7 +39,11 @@ export function editTask(task, patch, tasks, now = Date.now()) {
   if ('title' in patch) next.title = need(patch.title, 'Görev adı');
   if ('how' in patch) next.how = String(patch.how || '');
   if ('estimateMin' in patch) next.estimateMin = minutes(patch.estimateMin);
-  if ('scheduledAt' in patch) next.scheduledAt = Number.isFinite(patch.scheduledAt) ? patch.scheduledAt : null;
+  if ('plannedDay' in patch) next.plannedDay = /^\d{4}-\d{2}-\d{2}$/.test(patch.plannedDay || '') ? patch.plannedDay : null;
+  if ('scheduledAt' in patch) {
+    next.scheduledAt = Number.isFinite(patch.scheduledAt) ? patch.scheduledAt : null;
+    if (next.scheduledAt != null) next.plannedDay = isoDate(next.scheduledAt);
+  }
   if ('parallel' in patch) next.parallel = !!patch.parallel;
   if ('dependsOn' in patch) {
     const dep = patch.dependsOn || null;
@@ -205,6 +209,26 @@ export function agenda(range, tasks, routines, routineLog, projects = []) {
   return items.sort((a, b) => a.start - b.start || a.end - b.end);
 }
 
+/** Tasks picked for a day that have no clock time yet ("chosen for today"). */
+export function dayTray(iso, tasks, projects = []) {
+  const live = new Set(projects.filter((p) => !p.archived).map((p) => p.id));
+  return tasks.filter((t) => t.plannedDay === iso && t.scheduledAt == null && !isDone(t, tasks) && (!projects.length || live.has(t.projectId)));
+}
+
+/** What a calendar cell needs to know about a day's plan. */
+export function dayPlan(ts, tasks, routines, routineLog, projects = []) {
+  const items = agenda(dayRange(ts), tasks, routines, routineLog, projects);
+  const tray = dayTray(isoDate(ts), tasks, projects).length;
+  const taskItems = items.filter((i) => i.kind === 'task');
+  return { total: items.length + tray, tasks: taskItems.length + tray, done: items.filter((i) => i.done).length, items };
+}
+
+/** Clock position → minutes of the day (00:00 at the top, clockwise), snapped. */
+export function angleToMinutes(dx, dy, snap = 15) {
+  const frac = ((Math.atan2(dx, -dy) / (2 * Math.PI)) + 1) % 1;
+  return (Math.round((frac * 1440) / snap) * snap) % 1440;
+}
+
 /** Side-by-side columns for overlapping items (calendar layout). Adds col / cols to each item. */
 export function layout(items) {
   const out = items.map((i) => ({ ...i, col: 0, cols: 1 }));
@@ -284,6 +308,34 @@ export function streak(tasks, routineLog, now = Date.now()) {
   if (!days.has(isoDate(d.getTime()))) d.setDate(d.getDate() - 1);
   while (days.has(isoDate(d.getTime()))) { n++; d.setDate(d.getDate() - 1); }
   return n;
+}
+
+const stepPoints = (t) => 10 + Math.min(20, Math.round((t.estimateMin || 0) / 10));
+
+/** Garden points: every finished step and routine counts; longer steps count a little more. */
+export function score(tasks, routineLog) {
+  const xp = tasks.filter((t) => t.done && !tasks.some((k) => k.parentId === t.id)).reduce((n, t) => n + stepPoints(t), 0) + routineLog.length * 5;
+  let level = 1, floor = 0, need = 60;
+  while (xp >= floor + need) { floor += need; level++; need = 60 + (level - 1) * 30; }
+  return { xp, level, into: xp - floor, need };
+}
+
+/** Plan vs measured for one project, one row per task in tree order. */
+export function projectTable(projectId, tasks, sessions, events, now = Date.now()) {
+  const rows = [];
+  const walk = (parentId, depth) => {
+    for (const t of childrenOf(tasks, projectId, parentId)) {
+      const leaf = !tasks.some((k) => k.parentId === t.id);
+      const subtree = [t, ...descendants(tasks, t.id)];
+      const est = leaf ? (t.estimateMin || 0) : subtree.filter((x) => !tasks.some((k) => k.parentId === x.id)).reduce((n, x) => n + (x.estimateMin || 0), 0);
+      const ms = subtree.reduce((n, x) => n + actualMs(x.id, sessions, events, now), 0);
+      rows.push({ task: t, depth, leaf, estimateMin: est, actualMs: ms, done: isDone(t, tasks), blocked: isBlocked(t, tasks) });
+      walk(t.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  const top = rows.filter((r) => r.depth === 0);
+  return { rows, estimateMin: top.reduce((n, r) => n + r.estimateMin, 0), actualMs: projectActualMs(projectId, tasks, sessions, events, now) };
 }
 
 // ── breaking work down ─────────────────────────────────────────────────────

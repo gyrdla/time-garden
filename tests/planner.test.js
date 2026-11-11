@@ -128,3 +128,36 @@ test('user template from a broken-down task; planner data survives backup import
   assert.equal(back.tasks.length, 3);
   assert.deepEqual(normalizeImport({ app: 'time-garden', schema: 2, sessions: [] }).tasks, []);
 });
+
+test('pick for a day without a time, then give it a time', () => {
+  const t = mk({ title: 'Kapak görseli', plannedDay: '2026-11-11' });
+  assert.equal(t.plannedDay, '2026-11-11');
+  assert.deepEqual(P.dayTray('2026-11-11', [t]).map((x) => x.title), ['Kapak görseli']);
+  assert.equal(P.dayPlan(at(12), [t], [], []).total, 1);
+  const timed = P.editTask(t, { scheduledAt: at(16, 0, 12) }, [t]);
+  assert.equal(timed.plannedDay, '2026-11-12');
+  assert.equal(P.dayTray('2026-11-11', [timed]).length, 0);
+  assert.equal(P.dayPlan(at(12, 0, 12), [timed], [], []).tasks, 1);
+  assert.equal(P.editTask(timed, { scheduledAt: null, plannedDay: null }, [timed]).plannedDay, null);
+});
+
+test('clock angle to time of day', () => {
+  assert.equal(P.angleToMinutes(0, -10), 0);          // top = 00:00
+  assert.equal(P.angleToMinutes(10, 0), 6 * 60);      // right = 06:00
+  assert.equal(P.angleToMinutes(0, 10), 12 * 60);     // bottom = 12:00
+  assert.equal(P.angleToMinutes(-10, 0), 18 * 60);    // left = 18:00
+  assert.equal(P.angleToMinutes(-0.01, -10), 0);      // just before midnight snaps to 00:00
+  assert.equal(P.angleToMinutes(Math.sin(Math.PI * 14.26 / 12), -Math.cos(Math.PI * 14.26 / 12)), 14 * 60 + 15);
+});
+
+test('score grows with finished steps; table compares plan and measured time', () => {
+  const a = mk({ title: 'A', estimateMin: 30 }), a1 = mk({ title: 'A1', parentId: a.id, estimateMin: 20 }), a2 = mk({ title: 'A2', parentId: a.id, estimateMin: 40 });
+  const tasks = [a, { ...a1, done: true, doneAt: at(9) }, a2];
+  assert.deepEqual(P.score(tasks, []), { xp: 12, level: 1, into: 12, need: 60 });
+  assert.equal(P.score(tasks, new Array(10).fill({})).level, 2);
+  const sessions = [{ id: 's', taskId: a1.id, name: 'A1', category: 'Çalışma', startedAt: at(9), endedAt: at(9, 25), pauses: [] }];
+  const tb = P.projectTable(proj.id, tasks, sessions, []);
+  assert.deepEqual(tb.rows.map((r) => [r.task.title, r.depth, r.estimateMin, r.actualMs / 60000, r.done]), [['A', 0, 60, 25, false], ['A1', 1, 20, 25, true], ['A2', 1, 40, 0, false]]);
+  assert.equal(tb.estimateMin, 60);
+  assert.equal(tb.actualMs / 60000, 25);
+});

@@ -1,6 +1,6 @@
 // Time Garden service worker: precache the app shell, serve it offline.
 // Bump VERSION on every release so installed apps pick up the new files.
-const VERSION = 'time-garden-v2.1.1';
+const VERSION = 'time-garden-v2.2.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './icon.svg',
   './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',

@@ -185,6 +185,7 @@ export function coverage(sessions, events, range, now = Date.now()) {
 }
 
 export function fmtDur(ms) {
+  if (ms > 0 && ms < MIN) return `${Math.max(1, Math.round(ms / 1000))} sn`;
   const m = Math.round(ms / MIN);
   const h = Math.floor(m / 60);
   return h ? `${h} sa ${m % 60} dk` : `${m} dk`;
@@ -194,6 +195,12 @@ export function fmtClock(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const p = (n) => String(n).padStart(2, '0');
   return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
+}
+
+/** Ticking duration for things that are running: 4:07, then 1:04:07. */
+export function fmtLive(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000)), p = (n) => String(n).padStart(2, '0');
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}` : `${Math.floor(s / 60)}:${p(s % 60)}`;
 }
 
 export function fmtTime(ts) {

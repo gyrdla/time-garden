@@ -3,12 +3,12 @@
 import { $, $$, esc, icon, toast, haptic, catColor, fmtLongDate, WEEKDAYS } from './dom.js';
 import * as store from '../core/store.js';
 import { isPaused, ValidationError } from '../core/tracker.js';
-import { dayRange, summarize, sessionElapsed, sessionActive, eventInterval, clip, clipAll, total, fmtDur, fmtClock, fmtTime, isoDate, DAY } from '../core/time.js';
+import { dayRange, summarize, sessionElapsed, sessionActive, eventInterval, clip, clipAll, total, fmtDur, fmtClock, fmtLive, fmtTime, isoDate, DAY } from '../core/time.js';
 import { periodRange } from '../core/analytics.js';
 import { renderDial } from './dial.js';
 import { openStart, openSecondary, openPast, openEditSession, openEditEvent } from './sheets.js';
 import { openDay } from './nav.js';
-import { upNextHtml, bindUpNext } from './plan.js';
+import { afterFinish } from './plan.js';
 
 const QUICK = [['Instagram', 'active'], ['Safari', 'active'], ['Mesajlar', 'active'], ['Video', 'active'], ['Müzik', 'background']];
 
@@ -19,7 +19,7 @@ function act(promise) {
 function renderLive() {
   const card = $('#liveCard'), s = store.activeSession(), now = Date.now();
   const open = store.openEvents();
-  const chips = open.map((e) => `<button class="chip running" data-end="${e.id}">${esc(e.label)} · ${fmtDur(now - e.startedAt)}<span class="x" aria-label="Bitir">×</span></button>`).join('');
+  const chips = open.map((e) => `<button class="chip running" data-end="${e.id}">${esc(e.label)} · <span data-since="${e.startedAt}">${fmtLive(now - e.startedAt)}</span><span class="x" aria-label="Bitir">×</span></button>`).join('');
   const running = new Set(open.map((e) => e.label));
   const quick = [...new Map([...store.recentNames('event', 4).map((n) => [n, null]), ...QUICK]).entries()]
     .filter(([n]) => !running.has(n)).slice(0, 5)
@@ -43,7 +43,7 @@ function renderLive() {
       <button class="btn" id="finishBtn">${icon('stop')}Bitir</button></div>${sub}`;
     $('#editLive').onclick = () => openEditSession(s.id);
     $('#pauseBtn').onclick = () => { haptic(); act(store.togglePause()); };
-    $('#finishBtn').onclick = () => { haptic(20); act(store.finish().then((done) => done && toast(`Kaydedildi · ${fmtDur(sessionElapsed(done))}`))); };
+    $('#finishBtn').onclick = () => { haptic(20); act(store.finish().then(afterFinish)); };
   }
   $$('[data-end]', card).forEach((b) => { b.onclick = () => act(store.endSecondary(b.dataset.end)); });
   $$('[data-quick]', card).forEach((b) => { b.onclick = () => { haptic(); act(store.startSecondary({ label: b.dataset.quick, attention: b.dataset.att || 'active' })); }; });
@@ -91,7 +91,7 @@ export function flowHtml(range, now = Date.now()) {
 
 function eventRow(e, now) {
   return `<button class="flow-item sub" data-event="${e.id}"><span class="bar-c"></span>
-    <div><b>${esc(e.label)}${tag(e)}${e.attention === 'background' ? '<span class="tag">arka plan</span>' : ''}</b><small>${fmtTime(e.startedAt)} – ${e.endedAt ? fmtTime(e.endedAt) : 'sürüyor'}</small></div><span class="dur">${fmtDur((e.endedAt ?? now) - e.startedAt)}</span></button>`;
+    <div><b>${esc(e.label)}${tag(e)}${e.attention === 'background' ? '<span class="tag">arka plan</span>' : ''}</b><small>${fmtTime(e.startedAt)} – ${e.endedAt ? fmtTime(e.endedAt) : 'sürüyor'}</small></div><span class="dur"${e.endedAt ? '' : ` data-since="${e.startedAt}"`}>${e.endedAt ? fmtDur(e.endedAt - e.startedAt) : fmtLive(now - e.startedAt)}</span></button>`;
 }
 
 export function bindFlow(root) {
@@ -119,21 +119,21 @@ function renderWeek() {
   $$('[data-day]', $('#weekStrip')).forEach((b) => { b.onclick = () => openDay(b.dataset.day); });
 }
 
-function renderUpNext() {
-  const html = upNextHtml();
-  $('#upNextBlock').hidden = !html;
-  $('#upNext').innerHTML = html;
-  bindUpNext($('#upNext'));
-}
-
 export function renderHome() {
-  renderLive(); renderToday(); renderUpNext(); renderFlow(); renderWeek();
+  renderLive(); renderToday(); renderFlow(); renderWeek();
 }
 
 /** Called every second while Home is visible: only the cheap, changing bits. */
 export function tickHome() {
   const s = store.activeSession(), el = $('#liveClock');
   if (s && el) el.textContent = fmtClock(sessionElapsed(s));
+  tickSince($('#homeScreen'));
+}
+
+/** Repaint every running duration (elements carrying data-since) under `root`. */
+export function tickSince(root) {
+  const now = Date.now();
+  $$('[data-since]', root).forEach((n) => { n.textContent = fmtLive(now - Number(n.dataset.since)); });
 }
 
 export function bindHome() {
