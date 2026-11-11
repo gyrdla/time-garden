@@ -2,7 +2,7 @@
 // Bump DB_VERSION and add a step to `upgrade` when stores change.
 
 const DB_NAME = 'time-garden';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function upgrade(db, oldVersion) {
   if (oldVersion < 1) {
@@ -14,8 +14,18 @@ function upgrade(db, oldVersion) {
     db.createObjectStore('pages', { keyPath: 'date' });
     db.createObjectStore('kv', { keyPath: 'key' });
   }
+  if (oldVersion < 2) {
+    // Planner
+    db.createObjectStore('projects', { keyPath: 'id' });
+    const tasks = db.createObjectStore('tasks', { keyPath: 'id' });
+    tasks.createIndex('projectId', 'projectId');
+    db.createObjectStore('routines', { keyPath: 'id' });
+    db.createObjectStore('routineLog', { keyPath: 'id' });
+  }
   // Journal objects, photos, stickers, GIFs and collections get their own stores in later versions.
 }
+
+export const DATA_STORES = ['sessions', 'events', 'pages', 'projects', 'tasks', 'routines', 'routineLog'];
 
 let dbPromise = null;
 
@@ -25,7 +35,7 @@ export function open() {
     if (!globalThis.indexedDB) return reject(new Error('IndexedDB yok'));
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (e) => upgrade(req.result, e.oldVersion);
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => { req.result.onversionchange = () => req.result.close(); resolve(req.result); };
     req.onerror = () => reject(req.error);
     req.onblocked = () => reject(new Error('Veritabanı başka bir sekmede açık'));
   });
@@ -73,8 +83,8 @@ export function batch(ops) {
 
 /** Replace the whole dataset in one transaction (used by restore). */
 export function replaceAll(data) {
-  return tx(['sessions', 'events', 'pages', 'kv'], 'readwrite', (t) => {
-    for (const name of ['sessions', 'events', 'pages']) {
+  return tx([...DATA_STORES, 'kv'], 'readwrite', (t) => {
+    for (const name of DATA_STORES) {
       const s = t.objectStore(name);
       s.clear();
       for (const r of data[name] || []) s.put(r);

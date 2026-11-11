@@ -9,6 +9,7 @@ import { renderAnalysis, bindAnalysis } from './ui/analysis.js';
 import { renderJournal, bindJournal } from './ui/journal.js';
 import { renderThemes, bindThemes, applyTheme } from './ui/themes.js';
 import { bindSheets, openCreateMenu } from './ui/sheets.js';
+import { renderPlan, bindPlan } from './ui/plan.js';
 
 // Paint the last theme immediately so there is no flash before the database opens.
 try { const t = localStorage.getItem('tg-theme'); if (t) document.body.dataset.theme = t; } catch { /* private mode */ }
@@ -18,10 +19,11 @@ register('calendar', renderCalendar);
 register('analysis', renderAnalysis);
 register('journal', renderJournal);
 register('theme', renderThemes);
+register('plan', renderPlan);
 
 async function boot() {
   store.setErrorHandler(() => toast('Kaydedilemedi. Depolama dolu olabilir; yedek almanı öneririm.'));
-  bindNav(); bindSheets(); bindHome(); bindCalendar(); bindAnalysis(); bindJournal(); bindThemes();
+  bindNav(); bindSheets(); bindHome(); bindCalendar(); bindAnalysis(); bindJournal(); bindThemes(); bindPlan();
   $('#navAdd').onclick = openCreateMenu;
 
   await store.init();

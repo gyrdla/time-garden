@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/app.css">
 <link rel="stylesheet" href="styles/journal.css">
+<link rel="stylesheet" href="styles/plan.css">
 <title>Time Garden</title>
 <meta name="description" content="Zamanını keşfet, gününü yaratıcı bir günlükte sakla.">
 </head>
@@ -91,6 +92,11 @@
         <div class="stat-row" id="todayStats"></div>
       </section>
 
+      <section class="block" id="upNextBlock" hidden>
+        <div class="block-head"><h2>Sıradaki</h2><button class="btn ghost sm" data-go="plan">Plan</button></div>
+        <div class="flow" id="upNext"></div>
+      </section>
+
       <section class="block">
         <div class="block-head"><h2>Bugünün akışı</h2><button class="btn ghost sm" id="addPast">＋ Geçmiş kayıt</button></div>
         <div class="flow" id="todayFlow"></div>
@@ -100,6 +106,13 @@
         <div class="block-head"><h2>Bu hafta</h2><button class="btn ghost sm" data-go="calendar">Takvim</button></div>
         <div class="week-strip" id="weekStrip"></div>
       </section>
+    </section>
+
+    <!-- ───────────── PLAN ───────────── -->
+    <section class="screen" id="planScreen">
+      <header class="bar"><button class="icon-btn" data-go="home" aria-label="Geri"><svg class="ic"><use href="#i-back"/></svg></button><h1><svg class="ic"><use href="#i-spark"/></svg>Plan</h1><span class="bar-end"></span></header>
+      <div class="segmented" id="planTabs"><button class="selected" data-tab="day">Gün</button><button data-tab="week">Hafta</button><button data-tab="projects">Projeler</button></div>
+      <div id="planBody"></div>
     </section>
 
     <!-- ───────────── CALENDAR ───────────── -->
@@ -176,10 +189,10 @@
 
   <nav class="bottom-nav" aria-label="Ana gezinme">
     <button class="nav-item active" data-screen="home"><svg class="ic"><use href="#i-home"/></svg><small>Ana sayfa</small></button>
-    <button class="nav-item" data-screen="calendar"><svg class="ic"><use href="#i-cal"/></svg><small>Takvim</small></button>
+    <button class="nav-item" data-screen="plan"><svg class="ic"><use href="#i-spark"/></svg><small>Plan</small></button>
     <button class="nav-add" id="navAdd" aria-label="Yeni kayıt"><svg class="ic"><use href="#i-plus"/></svg></button>
+    <button class="nav-item" data-screen="calendar"><svg class="ic"><use href="#i-cal"/></svg><small>Takvim</small></button>
     <button class="nav-item" data-screen="analysis"><svg class="ic"><use href="#i-chart"/></svg><small>Analiz</small></button>
-    <button class="nav-item" data-screen="theme"><svg class="ic"><use href="#i-palette"/></svg><small>Tema</small></button>
   </nav>
 </div>
 

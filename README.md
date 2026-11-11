@@ -1,4 +1,4 @@
-# Time Garden — v2.0
+# Time Garden — v2.1
 
 Mobile-first, local-first time journal PWA. No build step: the repository root is the deployed site.
 
@@ -18,6 +18,7 @@ src/core/             business logic, no DOM
   time.js             interval maths: union / intersect / subtract, day summaries
   tracker.js          session + event state transitions and validation
   analytics.js        day / week / month / year analysis
+  planner.js          projects, nested steps, chains, routines, agenda layout, suggestions
   migrate.js          schema versions, v1 → v2 migration, import validation
   db.js               IndexedDB wrapper
   store.js            in-memory state + the only code that writes to the database
@@ -26,13 +27,17 @@ sw.js                 offline app shell (bump VERSION on each release)
 tests/                node:test unit tests
 ```
 
-## Data model (schema 2, IndexedDB `time-garden`)
+## Data model (schema 3, IndexedDB `time-garden`)
 
 | Store | Key | Record |
 |---|---|---|
 | `sessions` | `id` | Primary activity: `name, category, startedAt, endedAt, pauses[{start,end}], note, source` |
 | `events` | `id` | Secondary / concurrent activity: `label, attention(active\|background), startedAt, endedAt, sessionId, source` |
 | `pages` | `date` | Journal page (v1 HTML model for now): `note, items, draw` |
+| `projects` | `id` | `name, area, category, note, archived` |
+| `tasks` | `id` | Step in a project tree: `projectId, parentId, title, how, estimateMin, scheduledAt, dependsOn, parallel, done` |
+| `routines` | `id` | Weekly repeating item: `title, days[], time, estimateMin, parallel, active` |
+| `routineLog` | `id` | One completed routine occurrence: `routineId, date` |
 | `kv` | `key` | `settings`, `schema`, migration markers, pre-import backup |
 
 `source` is `timer` (both ends stamped by the clock) or `manual` (typed or edited by hand).
@@ -47,13 +52,27 @@ Overlap rules (`time.js → summarize`):
 - **Unique elapsed** = union of everything; this is the "tracked time" figure.
 - **Focus** = primary time with no attention-taking event on top (background events such as music do not count).
 
+Sessions and events started from a task carry its `taskId`, which is how plan and measured
+time are compared. Project totals use the union of those intervals, so parallel work is counted once.
+
+## Planner
+
+- **Break down**: a task (or a whole project) is split into steps from workflow templates at three
+  detail levels, from pasted lines, or from templates saved from the user's own broken-down tasks.
+  No AI service is involved; an AI provider could be added behind `matchTemplate`/`templateSteps`.
+- **Chains**: `dependsOn` keeps a step waiting until its predecessor is done.
+- **Parallel**: `parallel` steps may overlap others in the agenda and start as secondary events.
+- **Suggestions** (never applied automatically): duration from the median of past tracked sessions
+  with the same name; time slots after the chain predecessor, in the hours the category has really
+  been worked over the last 28 days, or in the next free gap.
+
 A native iOS companion can write `events` with a new `source` value into the same model.
 
 ## Status
 
 Working and tested: timestamp timer with pause/resume, overlapping secondary events, editing
 and retrospective entry, 24-hour dial, month/week/year calendar, day/week/month/year analysis,
-journal save/autosave, tear-off drag gesture, themes, JSON backup/restore, offline shell.
+journal save/autosave, planner (projects, breakdown, chains, routines, day/week agenda), tear-off drag gesture, themes, JSON backup/restore, offline shell.
 
 Not built yet: object canvas for the journal (handles, undo/redo, layers, locking), sticker
 library, background removal, emoji and GIF generation, native Screen Time integration.

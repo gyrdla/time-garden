@@ -8,6 +8,7 @@ import { periodRange } from '../core/analytics.js';
 import { renderDial } from './dial.js';
 import { openStart, openSecondary, openPast, openEditSession, openEditEvent } from './sheets.js';
 import { openDay } from './nav.js';
+import { upNextHtml, bindUpNext } from './plan.js';
 
 const QUICK = [['Instagram', 'active'], ['Safari', 'active'], ['Mesajlar', 'active'], ['Video', 'active'], ['Müzik', 'background']];
 
@@ -118,8 +119,15 @@ function renderWeek() {
   $$('[data-day]', $('#weekStrip')).forEach((b) => { b.onclick = () => openDay(b.dataset.day); });
 }
 
+function renderUpNext() {
+  const html = upNextHtml();
+  $('#upNextBlock').hidden = !html;
+  $('#upNext').innerHTML = html;
+  bindUpNext($('#upNext'));
+}
+
 export function renderHome() {
-  renderLive(); renderToday(); renderFlow(); renderWeek();
+  renderLive(); renderToday(); renderUpNext(); renderFlow(); renderWeek();
 }
 
 /** Called every second while Home is visible: only the cheap, changing bits. */

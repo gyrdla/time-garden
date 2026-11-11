@@ -11,7 +11,7 @@ const body = () => $('#sheetBody');
 
 export function closeSheet() { backdrop().hidden = true; body().innerHTML = ''; }
 
-function openSheet(title, html) {
+export function openSheet(title, html) {
   body().innerHTML = `<div class="sheet-head"><h2>${esc(title)}</h2><button type="button" class="icon-btn sm" data-close aria-label="Kapat">${icon('close')}</button></div>${html}`;
   backdrop().hidden = false;
   $('[data-close]', body()).onclick = closeSheet;
@@ -22,7 +22,7 @@ export function bindSheets() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !backdrop().hidden) closeSheet(); });
 }
 
-async function run(fn, okText) {
+export async function run(fn, okText) {
   const err = $('.form-error', body());
   try {
     await fn();
@@ -48,10 +48,11 @@ export function openCreateMenu() {
   openSheet('Yeni', `<div class="menu">
     ${active ? '' : `<button data-act="start">${icon('play')}<div><b>Etkinlik başlat</b><small>Sayaç şimdi başlar, sen bitirene kadar ölçer</small></div></button>`}
     <button data-act="secondary">${icon('plus')}<div><b>Paralel kayıt başlat</b><small>${active ? 'Ana etkinlik durmadan, üstüne eklenir' : 'Telefon, müzik gibi aynı anda yaptıkların'}</small></div></button>
+    <button data-act="task">${icon('spark')}<div><b>Görev ekle</b><small>Bir projeye yeni adım; istersen saat ver</small></div></button>
     <button data-act="past">${icon('cal')}<div><b>Geçmiş kayıt ekle</b><small>Saatlerini sen girersin, “elle” olarak işaretlenir</small></div></button>
     <button data-act="journal">${icon('book')}<div><b>Bugünün günlük sayfası</b><small>Not, fotoğraf ve çıkartma ekle</small></div></button>
   </div>`);
-  const acts = { start: openStart, secondary: () => openSecondary(), past: () => openPast('session'), journal: () => { closeSheet(); openDay(isoDate(Date.now())); } };
+  const acts = { task: () => import('./plan.js').then((m) => m.openQuickTask()), start: openStart, secondary: () => openSecondary(), past: () => openPast('session'), journal: () => { closeSheet(); openDay(isoDate(Date.now())); } };
   $$('[data-act]', body()).forEach((b) => { b.onclick = () => acts[b.dataset.act](); });
 }
 

@@ -1,13 +1,13 @@
 // Time Garden service worker: precache the app shell, serve it offline.
 // Bump VERSION on every release so installed apps pick up the new files.
-const VERSION = 'time-garden-v2.0.0';
+const VERSION = 'time-garden-v2.1.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './icon.svg',
   './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
-  './styles/tokens.css', './styles/app.css', './styles/journal.css',
+  './styles/tokens.css', './styles/app.css', './styles/journal.css', './styles/plan.css',
   './src/main.js',
-  './src/core/time.js', './src/core/tracker.js', './src/core/analytics.js', './src/core/migrate.js', './src/core/db.js', './src/core/store.js',
-  './src/ui/dom.js', './src/ui/nav.js', './src/ui/dial.js', './src/ui/home.js', './src/ui/sheets.js', './src/ui/calendar.js', './src/ui/analysis.js', './src/ui/journal.js', './src/ui/themes.js',
+  './src/core/time.js', './src/core/tracker.js', './src/core/analytics.js', './src/core/migrate.js', './src/core/db.js', './src/core/store.js', './src/core/planner.js',
+  './src/ui/dom.js', './src/ui/nav.js', './src/ui/dial.js', './src/ui/home.js', './src/ui/sheets.js', './src/ui/calendar.js', './src/ui/analysis.js', './src/ui/journal.js', './src/ui/themes.js', './src/ui/plan.js',
   './fonts/dm-sans-latin-400-normal.woff2', './fonts/dm-sans-latin-ext-400-normal.woff2',
   './fonts/dm-sans-latin-500-normal.woff2', './fonts/dm-sans-latin-ext-500-normal.woff2',
   './fonts/dm-sans-latin-700-normal.woff2', './fonts/dm-sans-latin-ext-700-normal.woff2',
