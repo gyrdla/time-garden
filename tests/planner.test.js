@@ -65,8 +65,8 @@ test('agenda: tasks and routines on the day; overlapping items sit side by side'
   const shoot = { ...mk({ title: 'Çekim', estimateMin: 60, scheduledAt: at(14) }) };
   const makeup = { ...mk({ title: 'Makyaj', estimateMin: 40, scheduledAt: at(14), parallel: true }) };
   const edit = { ...mk({ title: 'Kurgu', estimateMin: 60, scheduledAt: at(14, 30) }) };
-  const routine = P.newRoutine({ title: 'Sabah planı', days: [2], time: '09:00', estimateMin: 15 }); // Wednesday
-  const other = P.newRoutine({ title: 'Pazartesi işi', days: [0], time: '09:00' });
+  const routine = P.newRoutine({ title: 'Sabah planı', days: [2], time: '09:00', estimateMin: 15 }, at(8, 0, 1)); // Wednesday
+  const other = P.newRoutine({ title: 'Pazartesi işi', days: [0], time: '09:00' }, at(8, 0, 1));
   const items = P.agenda(DAY11, [shoot, makeup, edit], [routine, other], []);
   assert.deepEqual(items.map((i) => i.title), ['Sabah planı', 'Makyaj', 'Çekim', 'Kurgu']);
   const laid = P.layout(items);
@@ -205,4 +205,18 @@ test('treasure holds every finished step, newest first, and habits that were bui
   assert.deepEqual(t.steps.map((x) => x.title), ['B', 'A1']);
   assert.deepEqual(t.habits.map((x) => x.title), ['Su iç']);
   assert.equal(t.count, 2);
+});
+
+test('a habit appears only from its start day; twice-a-day habits need both to count the day', () => {
+  const care = P.newRoutine({ title: 'Ağız bakımı', times: ['22:00', '08:00'], status: 'active', targetDays: 2 }, at(12, 0, 11));
+  assert.deepEqual(care.times, ['08:00', '22:00']);
+  assert.equal(P.agenda([at(0, 0, 10), at(0, 0, 11)], [], [care], []).length, 0);            // the day before it started
+  const day = P.agenda(DAY11, [], [care], [{ id: 'x', routineId: care.id, date: '2026-11-11', slot: 1 }]);
+  assert.deepEqual(day.map((i) => [new Date(i.start).getHours(), i.slot, i.done]), [[8, 0, false], [22, 1, true]]);
+  const log = (d, slot) => ({ id: `${d}${slot}`, routineId: care.id, date: `2026-11-${d}`, slot });
+  let c = P.habitChain([care], [log(11, 0), log(12, 0), log(12, 1)]);
+  assert.deepEqual([c.progress.done, c.progress.ready], [1, false]);                          // the 11th had only the morning
+  c = P.habitChain([care], [log(11, 0), log(11, 1), log(12, 0), log(12, 1)]);
+  assert.deepEqual([c.progress.done, c.progress.ready], [2, true]);
+  assert.throws(() => P.newRoutine({ title: 'x', times: ['25:99'] }), ValidationError);
 });

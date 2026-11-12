@@ -3,7 +3,8 @@
 .cam{position:fixed;inset:0;z-index:100;background:#17131a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:var(--s4);padding:calc(var(--s4) + env(safe-area-inset-top)) var(--s4) calc(var(--s4) + env(safe-area-inset-bottom))}
 .cam-close{position:absolute;top:calc(var(--s3) + env(safe-area-inset-top));right:var(--s3);z-index:2}
 .cam-hint{color:#f3e9f1;font-size:var(--fs-sm);text-align:center}
-.cam-frame{position:relative;width:min(92vw,calc(72dvh * var(--fr)));max-width:520px}
+.cam-frame{position:relative;width:min(92vw,calc(72vh * var(--fr)));width:min(92vw,calc(72dvh * var(--fr)));max-width:520px}
+@supports not (aspect-ratio:1){.cam-frame{height:calc(min(92vw,520px) / var(--fr))}}
 .cam-frame video{position:absolute;object-fit:cover;background:#000}
 .cam-frame img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;user-select:none;-webkit-user-select:none}
 .cam-shutter{position:absolute;left:30%;width:40%;top:78%;height:14%;border-radius:999px}

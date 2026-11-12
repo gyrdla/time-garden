@@ -20,15 +20,20 @@
 .paper-stack::before,.paper-stack::after{content:"";position:absolute;left:5px;right:5px;top:8px;bottom:-7px;border-radius:14px;background:#f4f2ed;box-shadow:0 2px 5px rgba(90,80,70,.12);z-index:0}
 .paper-stack::after{left:11px;right:11px;bottom:-13px;background:#eeebe5}
 /* A calendar leaf: paper white in every theme, like a printed tear-off page. */
-.paper{position:relative;z-index:2;min-height:470px;padding:30px var(--s4) var(--s4);border-radius:14px;background:#fbfaf7;background-image:radial-gradient(rgba(120,110,100,.05) 1px,transparent 1px);background-size:5px 5px;box-shadow:0 12px 20px rgba(90,80,70,.16);transform-origin:50% 0;will-change:transform;color:#1c1a19}
-.pin{position:absolute;top:11px;width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#d9d7d2,#9c9a95);box-shadow:inset 0 1px 1px rgba(0,0,0,.25)}
+/* A calendar leaf: paper white in every theme. The writing area is ruled with a dotted grid, like a notebook page. */
+.paper{position:relative;z-index:2;min-height:470px;padding:30px var(--s4) var(--s4);border-radius:14px;overflow:hidden;background-color:#fbfaf7;
+  background-image:radial-gradient(circle,rgba(70,90,130,.34) 1px,transparent 1.3px),linear-gradient(rgba(70,90,130,.16) 1px,transparent 1px);
+  background-size:15px 30px,100% 30px;background-position:0 23px,0 8px;
+  box-shadow:0 12px 20px rgba(90,80,70,.16);transform-origin:50% 0;will-change:transform;color:#1c1a19}
+/* punched holes at the top of the leaf */
+.pin{position:absolute;z-index:1;top:10px;width:10px;height:10px;border-radius:50%;background:var(--bg-solid);box-shadow:inset 0 1.5px 2px rgba(60,50,40,.35)}
 .pin.l{left:38%}.pin.r{right:38%}
-.leaf-head{position:relative;display:flex;flex-direction:column;align-items:center;font-family:var(--font-serif);pointer-events:none}
+.leaf-head{position:relative;display:flex;flex-direction:column;align-items:center;font-family:var(--font-serif);pointer-events:none;height:218px;margin:-30px calc(-1 * var(--s4)) 0;padding-top:30px;background:#fbfaf7;border-bottom:1px solid rgba(70,90,130,.22)}
 .leaf-head i{font-size:19px;font-weight:500}
 .leaf-head b{font-size:132px;font-weight:500;line-height:.92;letter-spacing:-.03em;font-variant-numeric:lining-nums}
 .leaf-head small{font-size:15px;font-style:italic;color:#4a4744}
-.paper-content{position:static;margin-top:var(--s2)}
-.paper-content textarea{width:100%;min-height:210px;border:0;outline:0;resize:none;background:transparent;color:inherit;font:italic 500 21px/30px var(--font-serif);padding:0 4px;text-align:center}
+.paper-content{position:static;margin-top:0}
+.paper-content textarea{width:100%;min-height:210px;border:0;outline:0;resize:none;background:transparent;color:inherit;font:italic 500 21px/30px var(--font-serif);padding:3px 4px 0;text-align:left}
 .paper-content textarea::placeholder{color:#b9b4ad}
 #canvasItems{position:absolute;inset:0;pointer-events:none}
 #canvasItems .placed{position:absolute;pointer-events:auto;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -45,6 +50,7 @@
 #drawOverlay.drawing{pointer-events:auto;cursor:crosshair}
 #drawOverlay path{pointer-events:stroke;cursor:grab;touch-action:none}
 #drawOverlay.drawing path{pointer-events:none}
+#drawOverlay.erasing{cursor:cell}
 #drawOverlay path.selected{stroke:#76528f}
 .tear-handle{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;min-height:76px;margin-top:var(--s5);padding:var(--s3);border-radius:var(--r-md);color:var(--ink-soft);font-size:var(--fs-sm);touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
 .tear-handle .ic{width:26px;height:26px;animation:nudge 2.2s var(--ease) infinite}
@@ -52,3 +58,8 @@
 .tear-handle.armed .ic{animation:none;transform:translateY(-6px)}
 @keyframes nudge{50%{transform:translateY(-5px)}}
 
+
+@media (min-width:700px){
+  .paper{min-height:640px}
+  .paper-content textarea{min-height:380px}
+}

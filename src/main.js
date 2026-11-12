@@ -46,6 +46,9 @@ async function boot() {
   window.addEventListener('focus', wake);
 }
 
+// Behave like an app, not a web page: no pinch zoom (double-tap zoom is switched off in CSS).
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 boot().catch((e) => { console.error(e); toast('Uygulama başlatılamadı. Sayfayı yenilemeyi dene.'); });
 
 if ('serviceWorker' in navigator) {

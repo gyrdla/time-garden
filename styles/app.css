@@ -1,8 +1,10 @@
 /* Time Garden components. Colours, type, spacing and radii come from tokens.css only. */
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;min-height:100dvh;background:var(--bg-solid);background-image:var(--bg);background-attachment:fixed;color:var(--ink);font:400 var(--fs-md)/1.4 var(--font-ui)}
+html{-webkit-text-size-adjust:100%;overflow-x:hidden;touch-action:pan-y;overscroll-behavior:none}
+body{overflow-x:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior-y:none}
+input,textarea,[contenteditable="true"]{-webkit-user-select:text;user-select:text}
+body{margin:0;min-height:100vh;min-height:100dvh;background:var(--bg-solid);background-image:var(--bg);background-attachment:fixed;color:var(--ink);font:400 var(--fs-md)/1.4 var(--font-ui)}
 button,input,textarea,select{font:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none;padding:0;touch-action:manipulation}
 h1,h2,p,ul{margin:0;padding:0}
@@ -12,7 +14,7 @@ ul{list-style:none}
 .deco{display:var(--deco)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-.app-shell{max-width:520px;margin:0 auto;min-height:100dvh;padding:env(safe-area-inset-top) 0 calc(96px + env(safe-area-inset-bottom))}
+.app-shell{max-width:520px;margin:0 auto;min-height:100vh;min-height:100dvh;padding:env(safe-area-inset-top) 0 calc(96px + env(safe-area-inset-bottom))}
 .screen{display:none;padding:var(--s3) var(--s4) var(--s5)}
 .screen.active{display:block;animation:screen-in var(--t-med) var(--ease)}
 @keyframes screen-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -119,7 +121,7 @@ body[data-theme="white"] .wordmark,body[data-theme="minimal"] .wordmark{font:700
 .week-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
 .week-cell{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:74px;padding:var(--s2) 0;border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);font-size:var(--fs-xs);color:var(--ink-soft)}
 .week-cell b{font-size:var(--fs-md);font-weight:500;color:var(--ink)}
-.week-cell.today{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
+.week-cell.today{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
 .week-cell .fill{width:6px;height:22px;flex:none;border-radius:3px;background:var(--track);position:relative;overflow:hidden}
 .week-cell .fill i{position:absolute;left:0;right:0;bottom:0;background:var(--accent-2);border-radius:3px}
 
@@ -127,7 +129,7 @@ body[data-theme="white"] .wordmark,body[data-theme="minimal"] .wordmark{font:700
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px 4px;margin-bottom:var(--s4)}
 .weekday{text-align:center;font-size:var(--fs-xs);color:var(--ink-soft);padding-bottom:4px}
 .day-cell{aspect-ratio:1;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:var(--fs-sm);background:var(--surface);border:1px solid var(--line);position:relative;min-width:0}
-.day-cell.has{background:color-mix(in srgb,var(--accent-2) calc(var(--lvl) * 60%),var(--surface-strong))}
+.day-cell.has{background:var(--accent-2);background:color-mix(in srgb,var(--accent-2) calc(var(--lvl) * 60%),var(--surface-strong))}
 .day-cell.today{border:1.5px solid var(--accent-ink);font-weight:700}
 .day-cell .mark{position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:var(--accent-ink)}
 .cal-grid.leaves{gap:6px 5px}
@@ -155,7 +157,7 @@ body[data-theme="white"] .wordmark,body[data-theme="minimal"] .wordmark{font:700
 .year-month b{display:block;font-weight:500;margin-bottom:6px}
 .year-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
 .year-days i{aspect-ratio:1;border-radius:50%;background:var(--track)}
-.year-days i.has{background:color-mix(in srgb,var(--accent-2) calc(30% + var(--lvl) * 70%),var(--track))}
+.year-days i.has{background:var(--accent-2);background:color-mix(in srgb,var(--accent-2) calc(30% + var(--lvl) * 70%),var(--track))}
 
 /* ── analysis ── */
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);margin-bottom:var(--s4)}
@@ -204,19 +206,25 @@ body[data-theme="white"] .wordmark,body[data-theme="minimal"] .wordmark{font:700
 body[data-theme="white"] .bottom-nav{background:rgba(255,255,255,.92);border-color:var(--line)}
 .nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;color:var(--ink-faint);font-size:10px}
 .nav-item.active{color:var(--accent-ink)}
-.nav-add{width:58px;height:58px;margin:-22px auto 0;border-radius:50%;display:grid;place-items:center;background:var(--cta);color:var(--on-accent);box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 40%,transparent),0 0 0 5px var(--bg-solid);transition:transform var(--t-fast) var(--ease)}
+.nav-add{width:58px;height:58px;margin:-22px auto 0;border-radius:50%;display:grid;place-items:center;background:var(--cta);color:var(--on-accent);box-shadow:0 8px 20px var(--accent),0 0 0 5px var(--bg-solid);box-shadow:0 8px 20px color-mix(in srgb,var(--accent) 40%,transparent),0 0 0 5px var(--bg-solid);transition:transform var(--t-fast) var(--ease)}
 .nav-add .ic{width:26px;height:26px;stroke-width:2}
 
 /* ── sheets & forms ── */
 .sheet-backdrop{position:fixed;inset:0;z-index:40;background:rgba(60,40,70,.28);display:flex;align-items:flex-end;justify-content:center;animation:fade var(--t-fast)}
 body[data-theme="white"] .sheet-backdrop{background:rgba(0,0,0,.3)}
 @keyframes fade{from{opacity:0}}
-.sheet{width:100%;max-width:520px;max-height:92dvh;overflow:auto;background:var(--surface-strong);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:var(--s4) var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.12);animation:sheet-in var(--t-med) var(--ease)}
+.sheet{width:100%;max-width:520px;max-height:92vh;max-height:92dvh;overflow:auto;-webkit-overflow-scrolling:touch;background:var(--surface-strong);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:var(--s4) var(--s4) calc(var(--s5) + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.12);animation:sheet-in var(--t-med) var(--ease)}
 @keyframes sheet-in{from{transform:translateY(40px);opacity:0}}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--s4)}
-.field{display:grid;gap:6px;font-size:var(--fs-sm);color:var(--ink-soft);margin-bottom:var(--s3)}
+.field{display:grid;gap:6px;min-width:0;font-size:var(--fs-sm);color:var(--ink-soft);margin-bottom:var(--s3)}
 .field input,.field select,.field textarea{width:100%;min-height:46px;padding:10px var(--s3);border-radius:var(--r-sm);border:1px solid var(--line-soft);background:var(--surface-sunk);color:var(--ink);font-size:16px}
 .field textarea{min-height:64px;resize:vertical}
+.field input,.time-row input{min-width:0;max-width:100%;-webkit-appearance:none;appearance:none;text-align:left}
+.field input::-webkit-date-and-time-value{text-align:left}
+.times{display:flex;flex-wrap:wrap;gap:var(--s2);margin-bottom:var(--s2)}
+.time-row{display:inline-flex;align-items:center;border-radius:var(--r-sm);border:1px solid var(--line-soft);background:var(--surface-sunk);overflow:hidden}
+.time-row input{width:112px;min-height:46px;padding:10px var(--s3);border:0;background:none;font-size:16px}
+.time-row button{width:36px;height:46px;color:var(--ink-soft);font-size:18px;border-left:1px solid var(--line-soft)}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
 .check{display:flex;align-items:center;gap:var(--s2);min-height:44px;font-size:var(--fs-sm);color:var(--ink);margin-bottom:var(--s3)}
 .check input{width:20px;height:20px;accent-color:var(--accent-ink)}
@@ -233,3 +241,35 @@ body[data-theme="white"] .sheet-backdrop{background:rgba(0,0,0,.3)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ── iPad and other wide screens ── */
+@media (min-width:700px){
+  .app-shell{max-width:780px}
+  .screen{padding:var(--s5) var(--s6) var(--s6)}
+  .bottom-nav{width:min(calc(100% - 48px),560px)}
+  .tiles{gap:var(--s3)}
+  .tile{min-height:96px;font-size:var(--fs-sm)}
+  .dial-wrap{width:min(46vw,360px)}
+  .cal-grid{gap:12px 10px}
+  .cal-grid.leaves{gap:12px 10px}
+  .day-cell{font-size:var(--fs-lg)}
+  .day-cell.leaf small{font-size:12px}
+  .day-cell.leaf b{font-size:40px;margin-top:6px}
+  .day-cell.leaf em{font-size:11px;bottom:5px}
+  .lf-m{width:24px;height:24px;font-size:18px}
+  .lf-m img{max-width:24px;max-height:24px}
+  .lf-m.p0,.lf-m.p1{bottom:20px}
+  .lf-tape{width:40px;height:10px}
+  .kpis{grid-template-columns:repeat(3,1fr)}
+  .theme-grid{grid-template-columns:repeat(3,1fr)}
+  .year-grid{grid-template-columns:repeat(4,1fr)}
+  .sheet-backdrop{align-items:center}
+  .sheet{border-radius:var(--r-lg);max-width:560px}
+}
+/* Safari before 15 has no aspect-ratio: give the square pieces an explicit height. */
+@supports not (aspect-ratio:1){
+  .dial-wrap{height:min(72vw,280px)}
+  .day-cell{height:13vw;max-height:104px}
+  .day-cell.leaf{height:16vw;max-height:128px}
+  .year-days i{height:6px}
+}

@@ -60,19 +60,22 @@ export const HABIT_DAYS = 21;
  * A habit. status: 'active' (the one being built now), 'queued' (waiting its turn; not in
  * the calendar yet) or 'acquired' (established; stays in the calendar and can be relaxed).
  */
-export function newRoutine({ title, projectId = null, category = 'Kişisel', days = [0, 1, 2, 3, 4, 5, 6], time = '09:00', estimateMin = 30, parallel = false,
+export function newRoutine({ title, projectId = null, category = 'Kişisel', days = [0, 1, 2, 3, 4, 5, 6], time = '09:00', times = null, estimateMin = 30, parallel = false,
   status = 'active', targetDays = HABIT_DAYS, startedAt = null, acquiredAt = null }, now = Date.now()) {
   const d = [...new Set((days || []).map(Number).filter((n) => n >= 0 && n <= 6))].sort();
   if (!d.length) throw new ValidationError('En az bir gün seç.');
-  if (!/^\d{2}:\d{2}$/.test(time)) throw new ValidationError('Saat geçersiz.');
+  // A habit may happen several times a day (morning and evening); the day counts only when all are done.
+  const slots = [...new Set((Array.isArray(times) && times.length ? times : [time]).map(String))].sort().slice(0, 4);
+  if (!slots.length || slots.some((t) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) throw new ValidationError('Saat geçersiz.');
   const st = ['active', 'queued', 'acquired'].includes(status) ? status : 'acquired';
   const target = Math.round(Number(targetDays));
   return { id: uid(), title: need(title, 'Alışkanlık adı'), projectId, category: CATEGORIES.includes(category) ? category : 'Diğer',
-    days: d, time, estimateMin: minutes(estimateMin) || DEFAULT_MIN, parallel: !!parallel, active: true,
+    days: d, time: slots[0], times: slots, estimateMin: minutes(estimateMin) || DEFAULT_MIN, parallel: !!parallel, active: true,
     status: st, targetDays: Number.isFinite(target) && target > 0 ? Math.min(target, 365) : HABIT_DAYS,
     startedAt: st === 'queued' ? null : (startedAt ?? now), acquiredAt: st === 'acquired' ? (acquiredAt ?? now) : null, createdAt: now };
 }
 
+export const routineTimes = (r) => (Array.isArray(r.times) && r.times.length ? r.times : [r.time || '09:00']);
 const habitStatus = (r) => r.status || 'acquired'; // routines made before the chain existed count as established
 
 /**
@@ -85,8 +88,9 @@ export function habitChain(routines, routineLog) {
   const current = routines.find((r) => habitStatus(r) === 'active') || null;
   let progress = null;
   if (current) {
-    const from = isoDate(current.startedAt || current.createdAt);
-    const done = new Set(routineLog.filter((l) => l.routineId === current.id && l.date >= from).map((l) => l.date)).size;
+    const from = isoDate(current.startedAt || current.createdAt), need = routineTimes(current).length, perDay = new Map();
+    for (const l of routineLog) if (l.routineId === current.id && l.date >= from) perDay.set(l.date, (perDay.get(l.date) || new Set()).add(l.slot || 0));
+    const done = [...perDay.values()].filter((set) => set.size >= need).length;
     const target = current.targetDays || HABIT_DAYS;
     progress = { done, target, pct: Math.min(1, done / target), ready: done >= target };
   }
@@ -246,12 +250,15 @@ export function agenda(range, tasks, routines, routineLog, projects = []) {
     if (s < range[1] && e > range[0]) items.push({ kind: 'task', id: t.id, title: t.title, start: s, end: e, parallel: t.parallel, done: isDone(t, tasks), projectId: t.projectId, blocked: isBlocked(t, tasks) });
   }
   const d = new Date(range[0]), dow = (d.getDay() + 6) % 7, iso = isoDate(range[0]);
-  const done = new Set(routineLog.filter((l) => l.date === iso).map((l) => l.routineId));
+  const done = new Set(routineLog.filter((l) => l.date === iso).map((l) => `${l.routineId}|${l.slot || 0}`));
   for (const r of routines) {
     if (!r.active || r.status === 'queued' || !r.days.includes(dow)) continue;
-    const [h, m] = r.time.split(':').map(Number);
-    const s = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
-    items.push({ kind: 'routine', id: r.id, title: r.title, start: s, end: s + r.estimateMin * MIN, parallel: r.parallel, done: done.has(r.id), projectId: r.projectId, date: iso });
+    if (iso < isoDate(r.startedAt || r.createdAt)) continue; // a habit is on the calendar only from the day it started
+    routineTimes(r).forEach((t, slot) => {
+      const [h, m] = t.split(':').map(Number);
+      const s = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
+      items.push({ kind: 'routine', id: r.id, slot, title: r.title, start: s, end: s + r.estimateMin * MIN, parallel: r.parallel, done: done.has(`${r.id}|${slot}`), projectId: r.projectId, date: iso });
+    });
   }
   return items.sort((a, b) => a.start - b.start || a.end - b.end);
 }

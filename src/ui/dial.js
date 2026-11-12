@@ -60,7 +60,7 @@ export function renderPlanDial(svg, items, actual, range, now) {
   for (const i of items) {
     const w = band / i.cols, r = OUT - w * (i.col + 0.5);
     const a = f(i.start), b = Math.max(f(i.end), a + 0.004);
-    out += `<path class="pd-item${i.done ? ' done' : ''}${i.parallel ? ' par' : ''}" data-kind="${i.kind}" data-id="${i.id}" data-col="${i.col}" data-cols="${i.cols}"
+    out += `<path class="pd-item${i.done ? ' done' : ''}${i.parallel ? ' par' : ''}" data-kind="${i.kind}" data-id="${i.id}" data-slot="${i.slot || 0}" data-col="${i.col}" data-cols="${i.cols}"
       d="${arc(r, a, b)}" fill="none" stroke="${i.color}" stroke-width="${(w - 1.5).toFixed(1)}"><title>${i.label}</title></path>`;
   }
   for (const a of actual) out += `<path class="pd-real" d="${arc(REAL, f(a.iv[0]), Math.max(f(a.iv[1]), f(a.iv[0]) + 0.003))}" fill="none" stroke="${a.color}" stroke-width="7"/>`;

@@ -274,8 +274,8 @@ function dayView(now) {
   const centre = !items.length ? ['Boş', tray.length ? 'saat ver' : 'plan yok'] : next ? [fmtTime(next.start), esc(next.title)] : [`${items.filter((i) => i.done).length}/${items.length}`, 'tamamlandı'];
   const color = (i) => (i.kind === 'routine' ? 'var(--accent-2)' : projColor(i.projectId));
   const row = (i) => `<div class="flow-item plan-row${i.done ? ' is-done' : ''}"${i.kind === 'task' && !i.done ? ` data-drag="${i.id}"` : ''}><span class="bar-c" style="--c:${color(i)}"></span>
-    <button class="grow" data-kind="${i.kind}" data-id="${i.id}"><b>${i.done ? '✓ ' : ''}${esc(i.title)}</b><small>${fmtTime(i.start)}–${fmtTime(i.end)}${i.kind === 'routine' ? ' · rutin' : ` · ${esc(store.getProject(i.projectId)?.name || '')}`}${i.parallel ? ' · aynı anda' : ''}${i.blocked ? ' · bekliyor' : ''}</small></button>
-    <span class="row-acts">${i.kind === 'task' && !i.done ? '<span class="grip" aria-label="Sürükle">⠿</span>' : ''}${i.done ? '' : (i.kind === 'task' ? `<button class="icon-btn sm" data-start="${i.id}" aria-label="Başlat">${icon('play')}</button>` : `<button class="icon-btn sm" data-rdone="${i.id}" aria-label="Tamamla">✓</button>`)}</span></div>`;
+    <button class="grow" data-kind="${i.kind}" data-id="${i.id}" data-slot="${i.slot || 0}"><b>${i.done ? '✓ ' : ''}${esc(i.title)}</b><small>${fmtTime(i.start)}–${fmtTime(i.end)}${i.kind === 'routine' ? ' · rutin' : ` · ${esc(store.getProject(i.projectId)?.name || '')}`}${i.parallel ? ' · aynı anda' : ''}${i.blocked ? ' · bekliyor' : ''}</small></button>
+    <span class="row-acts">${i.kind === 'task' && !i.done ? '<span class="grip" aria-label="Sürükle">⠿</span>' : ''}${i.done ? '' : (i.kind === 'task' ? `<button class="icon-btn sm" data-start="${i.id}" aria-label="Başlat">${icon('play')}</button>` : `<button class="icon-btn sm" data-rdone="${i.id}" data-slot="${i.slot || 0}" aria-label="Tamamla">✓</button>`)}</span></div>`;
   const [ws, we] = periodRange('week', dayAnchor);
   return `${liveBar(now)}${isToday ? deerCard(now) : ''}
     <div class="period-nav"><button class="icon-btn sm" id="planPrev" aria-label="Önceki hafta">${icon('back')}</button><div><b>${fmtLongDate(dayAnchor)}</b><small>${isToday ? 'Bugün' : weekTitle(ws, we)}</small></div><button class="icon-btn sm" id="planNext" aria-label="Sonraki hafta">${icon('next')}</button></div>
@@ -304,8 +304,8 @@ function bindDay(root) {
   const shift = (n) => { const d = new Date(dayAnchor); d.setDate(d.getDate() + 7 * n); dayAnchor = d.getTime(); renderPlan(); };
   $('#planPrev', root).onclick = () => shift(-1);
   $('#planNext', root).onclick = () => shift(1);
-  $$('[data-kind]', root).forEach((b) => { b.onclick = () => (b.dataset.kind === 'task' ? openTask(b.dataset.id) : openRoutineDay(b.dataset.id, isoDate(dayAnchor))); });
-  $$('[data-rdone]', root).forEach((b) => { b.onclick = () => { haptic(15); burst(b); act(store.setRoutineDone(b.dataset.rdone, isoDate(dayAnchor), true)); }; });
+  $$('[data-kind]', root).forEach((b) => { b.onclick = () => (b.dataset.kind === 'task' ? openTask(b.dataset.id) : openRoutineDay(b.dataset.id, isoDate(dayAnchor), Number(b.dataset.slot) || 0)); });
+  $$('[data-rdone]', root).forEach((b) => { b.onclick = () => { haptic(15); burst(b); act(store.setRoutineDone(b.dataset.rdone, isoDate(dayAnchor), true, Number(b.dataset.slot) || 0)); }; });
 }
 
 // ── week / month / year ────────────────────────────────────────────────────
@@ -323,7 +323,7 @@ function weekView(now) {
 /** The habit chain: established → the one being built → the queue (locked). */
 function habitSection() {
   const { routines, routineLog } = store.state, c = P.habitChain(routines, routineLog);
-  const when = (r) => `${r.days.length === 7 ? 'her gün' : r.days.map((x) => WEEKDAYS[x]).join(' ')} · ${r.time}`;
+  const when = (r) => `${r.days.length === 7 ? 'her gün' : r.days.map((x) => WEEKDAYS[x]).join(' ')} · ${P.routineTimes(r).join(' + ')}`;
   const node = (r, kind, extra = '') => `<button class="habit ${kind}${r.active ? '' : ' off'}" data-routine="${r.id}"><span class="h-dot"${kind === 'now' ? ` style="--p:${Math.round(c.progress.pct * 100)}"` : ''}>${kind === 'done' ? '✓' : kind === 'now' ? `${c.progress.done}` : '🔒'}</span><b>${esc(r.title)}</b><small>${extra || when(r)}</small></button>`;
   const chain = [...c.acquired.map((r) => node(r, 'done', r.active ? '' : 'duraklatıldı')),
     ...(c.current ? [node(c.current, 'now', `${c.progress.done}/${c.progress.target} gün`)] : []),
@@ -666,8 +666,9 @@ function openRoutine(id = null) {
     ${r ? `<p class="hint" style="text-align:left;margin-top:0">${label[status]}</p>` : (willQueue ? '<p class="hint" style="text-align:left;margin-top:0">Şu an başka bir alışkanlık üzerinde çalışıyorsun; bu sıraya eklenecek.</p>' : '')}
     <label class="field">Ne?<input name="title" required maxlength="160" value="${esc(r?.title || '')}" autocomplete="off"></label>
     <div class="days" role="group" aria-label="Günler">${WEEKDAYS.map((d, i) => `<label><input type="checkbox" name="d${i}"${!r || r.days.includes(i) ? ' checked' : ''}><span>${d}</span></label>`).join('')}</div>
-    <div class="field-row"><label class="field">Saat<input type="time" name="time" required value="${r?.time || '09:00'}"></label>
-    <label class="field">Süre (dk)<input type="number" inputmode="numeric" name="est" min="1" max="1440" value="${r?.estimateMin || 30}"></label></div>
+    <div class="field"><span>Günde hangi saatlerde? (sabah ve akşam gibi birden fazla olabilir)</span><div class="times" id="times"></div>
+      <button type="button" class="chip add" id="addTime">＋ Saat ekle</button></div>
+    <label class="field">Her seferi kaç dakika?<input type="number" inputmode="numeric" name="est" min="1" max="1440" value="${r?.estimateMin || 30}"></label>
     ${status === 'acquired' ? '' : `<label class="field">Kaç gün yapınca alışkanlık sayılsın?<input type="number" inputmode="numeric" name="target" min="1" max="365" value="${r?.targetDays || P.HABIT_DAYS}"></label>`}
     <label class="check"><input type="checkbox" name="par"${r?.parallel ? ' checked' : ''}>Başka bir işle aynı anda yapılabilir</label>
     ${status === 'acquired' ? `<label class="check"><input type="checkbox" name="active"${r.active ? ' checked' : ''}>Takvimde göster (kapatınca duraklar)</label>` : ''}
@@ -675,22 +676,34 @@ function openRoutine(id = null) {
     <div class="sheet-actions"><button class="btn full">Kaydet</button>${r ? '<button type="button" class="btn danger full" id="del">Alışkanlığı sil</button>' : ''}</div></form>`);
   const f = $('#f', body());
   if (!r) f.title.focus();
+  const box = $('#times', body());
+  const addTime = (v) => {
+    if (box.children.length >= 4) return;
+    const row = document.createElement('span');
+    row.className = 'time-row';
+    row.innerHTML = `<input type="time" required value="${v}" aria-label="Saat"><button type="button" aria-label="Bu saati kaldır">×</button>`;
+    $('button', row).onclick = () => { if (box.children.length > 1) row.remove(); };
+    box.appendChild(row);
+  };
+  (r ? P.routineTimes(r) : ['09:00']).forEach(addTime);
+  $('#addTime', body()).onclick = () => addTime('21:00');
   f.onsubmit = (e) => {
     e.preventDefault();
-    const input = { title: f.title.value, days: WEEKDAYS.map((_, i) => i).filter((i) => f['d' + i].checked), time: f.time.value, estimateMin: f.est.value, parallel: f.par.checked };
+    const input = { title: f.title.value, days: WEEKDAYS.map((_, i) => i).filter((i) => f['d' + i].checked), times: $$('#times input', body()).map((i) => i.value).filter(Boolean), estimateMin: f.est.value, parallel: f.par.checked };
     if (f.target) input.targetDays = f.target.value;
     run(() => (r ? store.updateRoutine(r.id, { ...input, ...(f.active ? { active: f.active.checked } : {}) }) : store.addRoutine(input)), r ? 'Kaydedildi' : (willQueue ? 'Sıraya eklendi' : 'Alışkanlık başladı'));
   };
   if (r) $('#del', body()).onclick = () => { if (confirm(`“${r.title}” silinsin mi?`)) run(() => store.removeRoutine(r.id), 'Silindi'); };
 }
 
-function openRoutineDay(id, date) {
+function openRoutineDay(id, date, slot = 0) {
   const r = store.getRoutine(id);
   if (!r) return;
-  const done = store.state.routineLog.some((l) => l.id === `${id}|${date}`);
+  const logId = slot ? `${id}|${date}|${slot}` : `${id}|${date}`, t = P.routineTimes(r)[slot] || r.time;
+  const done = store.state.routineLog.some((l) => l.id === logId);
   openSheet(r.title, `<div class="menu">
-    <button id="rDone">${icon('spark')}<div><b>${done ? 'Bugün için geri al' : 'Tamamlandı olarak işaretle'}</b><small>${r.time} · ${r.estimateMin} dk · alışkanlık</small></div></button>
-    <button id="rEdit">${icon('cal')}<div><b>Alışkanlığı düzenle</b><small>Günler, saat, süre</small></div></button></div>`);
-  $('#rDone', body()).onclick = (e) => { haptic(15); if (!done) burst(e.currentTarget); run(() => store.setRoutineDone(id, date, !done), done ? 'Geri alındı' : 'Bugün yapıldı · ＋1 yem'); };
+    <button id="rDone">${icon('spark')}<div><b>${done ? 'Geri al' : 'Yapıldı olarak işaretle'}</b><small>${t} · ${r.estimateMin} dk · alışkanlık</small></div></button>
+    <button id="rEdit">${icon('cal')}<div><b>Alışkanlığı düzenle</b><small>Günler, saatler, süre</small></div></button></div>`);
+  $('#rDone', body()).onclick = (e) => { haptic(15); if (!done) burst(e.currentTarget); run(() => store.setRoutineDone(id, date, !done, slot), done ? 'Geri alındı' : 'Yapıldı · ＋1 yem'); };
   $('#rEdit', body()).onclick = () => openRoutine(id);
 }

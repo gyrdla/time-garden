@@ -16,6 +16,7 @@ const TAPES = [['hearts', 'Kalpli'], ['pearl', 'Sedef'], ['bows', 'Fiyonk'], ['s
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 let tape = null; // armed washi: { preset } or { asset }
+let eraseMode = false;
 let selected = null, drawMode = false, drawing = null, drawSvg = null, saveTimer = 0, loadedDate = null;
 const bound = new WeakSet();
 
@@ -197,21 +198,48 @@ function setupDrawing() {
   drawSvg.setAttribute('preserveAspectRatio', 'none');
   $('#paperContent').appendChild(drawSvg);
   const pos = (e) => { const r = drawSvg.getBoundingClientRect(); return [((e.clientX - r.left) / r.width) * 320, ((e.clientY - r.top) / r.height) * 360]; };
+  // Eraser: any stroke the finger passes over is removed.
+  let erasing = false, erased = false;
+  const eraseAt = (e) => {
+    const r = drawSvg.getBoundingClientRect(), kx = r.width / 320, ky = r.height / 360, reach = 14;
+    for (const path of [...drawSvg.querySelectorAll('path')]) {
+      const [tx, ty] = (path.dataset.shift || '0,0').split(',').map(Number);
+      const nums = (path.getAttribute('d').match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        if (Math.hypot(r.left + nums[i] * kx + tx - e.clientX, r.top + nums[i + 1] * ky + ty - e.clientY) < reach) { path.remove(); erased = true; break; }
+      }
+    }
+  };
   drawSvg.addEventListener('pointerdown', (e) => {
     if (!drawMode) return;
+    if (eraseMode) { erasing = true; erased = false; drawSvg.setPointerCapture(e.pointerId); eraseAt(e); return; }
     const [x, y] = pos(e);
     drawing = document.createElementNS(SVG_NS, 'path');
     drawing.setAttribute('d', `M ${x.toFixed(1)} ${y.toFixed(1)}`);
-    for (const [k, v] of Object.entries({ fill: 'none', stroke: '#a778a7', 'stroke-width': '2.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) drawing.setAttribute(k, v);
+    for (const [k, v] of Object.entries({ fill: 'none', stroke: '#3b3532', 'stroke-width': '2.2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) drawing.setAttribute(k, v);
     drawSvg.appendChild(drawing);
     drawSvg.setPointerCapture(e.pointerId);
   });
-  drawSvg.addEventListener('pointermove', (e) => { if (!drawing) return; const [x, y] = pos(e); drawing.setAttribute('d', drawing.getAttribute('d') + ` L ${x.toFixed(1)} ${y.toFixed(1)}`); });
-  for (const ev of ['pointerup', 'pointercancel']) drawSvg.addEventListener(ev, () => { if (drawing) { bindStroke(drawing); drawing = null; savePage(); } });
+  drawSvg.addEventListener('pointermove', (e) => {
+    if (erasing) { eraseAt(e); return; }
+    if (!drawing) return;
+    const [x, y] = pos(e);
+    drawing.setAttribute('d', drawing.getAttribute('d') + ` L ${x.toFixed(1)} ${y.toFixed(1)}`);
+  });
+  for (const ev of ['pointerup', 'pointercancel']) drawSvg.addEventListener(ev, () => {
+    if (erasing) { erasing = false; if (erased) savePage(); return; }
+    if (drawing) { bindStroke(drawing); drawing = null; savePage(); }
+  });
+  const setErase = (on) => { eraseMode = on; $('#eraseToggle').classList.toggle('on', on); drawSvg.classList.toggle('erasing', on); };
+  $('#eraseToggle').onclick = () => { setErase(!eraseMode); toast(eraseMode ? 'Silgi: silmek istediğin çizginin üstünden geç' : 'Kalem'); };
+  $('#undoStroke').onclick = () => { const last = drawSvg.querySelector('path:last-of-type'); if (last) { last.remove(); savePage(); } else toast('Silinecek çizgi yok.'); };
   $('#drawToggle').onclick = () => {
     drawMode = !drawMode;
     drawSvg.classList.toggle('drawing', drawMode);
     $('#drawToggle').classList.toggle('on', drawMode);
+    $('#eraseToggle').hidden = !drawMode; $('#undoStroke').hidden = !drawMode;
+    if (!drawMode) setErase(false);
+    if (drawMode && tape) arm(null);
     select(null);
     toast(drawMode ? 'El yazısı açık: sayfaya parmağınla çiz' : 'El yazısı kapalı');
   };

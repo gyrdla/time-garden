@@ -337,12 +337,14 @@ export function removeRoutine(id) {
   return write(db.batch(ops));
 }
 
-export function setRoutineDone(routineId, date, done) {
-  const id = `${routineId}|${date}`;
+/** Tick one occurrence of a habit. `slot` is which time of day (0 = first). */
+export function setRoutineDone(routineId, date, done, slot = 0) {
+  const n = Number(slot) || 0, id = n ? `${routineId}|${date}|${n}` : `${routineId}|${date}`;
   state.routineLog = state.routineLog.filter((l) => l.id !== id);
-  if (done) state.routineLog.push({ id, routineId, date, doneAt: Date.now() });
+  const rec = { id, routineId, date, slot: n, doneAt: Date.now() };
+  if (done) state.routineLog.push(rec);
   emit('plan');
-  return write(done ? db.put('routineLog', { id, routineId, date, doneAt: Date.now() }) : db.del('routineLog', id));
+  return write(done ? db.put('routineLog', rec) : db.del('routineLog', id));
 }
 
 /** Give the deer one piece of food, if there is any. Returns the state before and after. */
