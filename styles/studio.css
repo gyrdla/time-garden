@@ -56,3 +56,7 @@
 .drop-t.card.p-yellow,.drop-t.card.p-pink,.drop-t.card.p-lilac,.drop-t.card.p-mint,.drop-t.card.p-sky{color:#3d3530}
 .drop-t.card.on{outline:2px solid var(--accent-ink)}
 #linkPick .chip,#projPick .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.drop-new{margin:var(--s2) 0 var(--s3)}
+.drop-t.new{border:1.5px dashed var(--line-soft);background:none;color:var(--accent-ink)}
+.area-mini{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);margin:var(--s2) 0 4px}
+#projPick .chips{margin:0}

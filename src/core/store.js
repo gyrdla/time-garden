@@ -93,6 +93,18 @@ function upsert(list, rec) {
 // ── queries ────────────────────────────────────────────────────────────────
 export const activeSession = () => state.sessions.find((s) => s.endedAt == null) || null;
 export const openEvents = () => state.events.filter((e) => e.endedAt == null);
+/** Paused parallel records that can still be picked up: those of the running session, or from today if none runs. */
+export function pausedEvents(now = Date.now()) {
+  const cur = state.sessions.find((s) => s.endedAt == null);
+  const dayStart = new Date(new Date(now).toDateString()).getTime();
+  return state.events.filter((e) => e.paused && (cur ? e.sessionId === cur.id : e.endedAt >= dayStart));
+}
+/** Time already spent on a parallel record's earlier stretches in the same session (or today). */
+export function stretchesMs(ev, now = Date.now()) {
+  const dayStart = new Date(new Date(now).toDateString()).getTime();
+  return state.events.filter((e) => e.id !== ev.id && e.endedAt != null && e.label === ev.label && (ev.sessionId ? e.sessionId === ev.sessionId : e.endedAt >= dayStart))
+    .reduce((n, e) => n + (e.endedAt - e.startedAt), 0);
+}
 export const eventsOf = (sessionId) => state.events.filter((e) => e.sessionId === sessionId);
 export const getSession = (id) => state.sessions.find((s) => s.id === id) || null;
 export const getEvent = (id) => state.events.find((e) => e.id === id) || null;
@@ -126,6 +138,8 @@ export function finish() {
   const cur = activeSession();
   if (!cur) return Promise.resolve(null);
   const r = tracker.finishSession(cur, openEvents());
+  // Paused parallel records of this session are finished with it.
+  for (const e of pausedEvents()) r.events.push({ ...e, paused: false, updatedAt: Date.now() });
   upsert(state.sessions, r.session);
   r.events.forEach((e) => upsert(state.events, e));
   emit('sessions');
@@ -146,6 +160,31 @@ export function endSecondary(id) {
   const e = tracker.endEvent(cur);
   upsert(state.events, e);
   emit('events');
+  return write(db.put('events', e));
+}
+
+export function pauseSecondary(id) {
+  const cur = getEvent(id);
+  if (!cur) return Promise.resolve();
+  const e = tracker.pauseEvent(cur);
+  upsert(state.events, e); emit('events');
+  return write(db.put('events', e));
+}
+
+export function resumeSecondary(id) {
+  const cur = getEvent(id);
+  if (!cur) return Promise.resolve();
+  const { old, next } = tracker.resumeEvent(cur, activeSession()?.id ?? null);
+  upsert(state.events, old); upsert(state.events, next); emit('events');
+  return write(db.batch([{ store: 'events', put: old }, { store: 'events', put: next }]));
+}
+
+/** End a paused record for good. */
+export function dropPaused(id) {
+  const cur = getEvent(id);
+  if (!cur || !cur.paused) return Promise.resolve();
+  const e = { ...cur, paused: false, updatedAt: Date.now() };
+  upsert(state.events, e); emit('events');
   return write(db.put('events', e));
 }
 

@@ -166,3 +166,17 @@ test('period analysis: week buckets, previous-period comparison, peak hours', ()
   assert.equal(peakWindow(new Array(24).fill(0)), null);
   assert.equal(analyze('year', at(12), [], [], at(13)).hasData, false);
 });
+
+test('pausing a parallel record ends the stretch; resuming starts a new one; totals never double', () => {
+  let lab = K.startSession({ name: 'LabOS', category: 'Çalışma' }, at(10));
+  const ig = { ...K.startEvent({ label: 'Instagram', sessionId: lab.id }, at(10, 5)), taskId: 't1' };
+  const paused = K.pauseEvent(ig, at(10, 15));
+  assert.deepEqual([paused.endedAt, paused.paused], [at(10, 15), true]);
+  assert.equal(K.pauseEvent(paused, at(10, 30)).endedAt, at(10, 15));          // already paused: unchanged
+  const { old, next } = K.resumeEvent(paused, lab.id, at(10, 40));
+  assert.deepEqual([old.paused, next.label, next.taskId, next.sessionId, next.startedAt], [false, 'Instagram', 't1', lab.id, at(10, 40)]);
+  const fin = K.finishSession(lab, [next], at(11));
+  const s = T.summarize([fin.session], [old, ...fin.events], DAY10, at(12));
+  assert.equal(min(s.secondaryMs), 30);                                       // 10 + 20
+  assert.equal(min(s.uniqueMs), 60);
+});

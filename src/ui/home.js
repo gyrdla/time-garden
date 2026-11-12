@@ -18,8 +18,7 @@ function act(promise) {
 function renderLive() {
   const card = $('#liveCard'), s = store.activeSession(), now = Date.now();
   const open = store.openEvents();
-  const chips = open.map((e) => `<button class="chip running" data-end="${e.id}">${esc(e.label)} · <span data-since="${e.startedAt}">${fmtLive(now - e.startedAt)}</span><span class="x" aria-label="Bitir">×</span></button>`).join('');
-  const sub = `<div class="live-sub"><div class="chips">${chips}<button class="chip add" id="addSecondary">＋ Paralel</button></div></div>`;
+  const sub = `<div class="live-sub">${parallelHtml(now)}<div class="chips"><button class="chip add" id="addSecondary">＋ Paralel</button></div></div>`;
 
   if (!s) {
     card.className = 'card live';
@@ -39,7 +38,7 @@ function renderLive() {
     $('#pauseBtn').onclick = () => { haptic(); act(store.togglePause()); };
     $('#finishBtn').onclick = () => { haptic(20); act(store.finish().then(afterFinish)); };
   }
-  $$('[data-end]', card).forEach((b) => { b.onclick = () => act(store.endSecondary(b.dataset.end)); });
+  bindParallel(card);
   const more = $('#addSecondary');
   if (more) more.onclick = () => openSecondary();
 }
@@ -61,6 +60,25 @@ function renderToday() {
   $('#todayStats').innerHTML = `<div class="stat"><b>${fmtDur(sum.primaryMs)}</b><small>Ana etkinlik</small></div>
     <div class="stat"><b>${fmtDur(sum.focusMs)}</b><small>Tek başına odak</small></div>
     <div class="stat"><b>${fmtDur(sum.concurrentMs)}</b><small>Aynı anda</small></div>`;
+}
+
+/** Every parallel record that is running or paused, each with its own pause / resume and finish. */
+export function parallelHtml(now = Date.now()) {
+  const list = [...store.openEvents(), ...store.pausedEvents(now)];
+  if (!list.length) return '';
+  return `<ul class="par-list">${list.map((e) => {
+    const base = store.stretchesMs(e, now), running = e.endedAt == null;
+    const time = running ? `<span data-since="${e.startedAt}" data-base="${base}">${fmtLive(base + now - e.startedAt)}</span>` : fmtLive(base + e.endedAt - e.startedAt);
+    return `<li class="${running ? 'run' : 'held'}"><span class="pulse"></span><b>${esc(e.label)}</b><span class="t">${time}</span>
+      <button class="mini-btn" data-${running ? 'ppause' : 'presume'}="${e.id}" aria-label="${running ? 'Duraklat' : 'Devam et'}: ${esc(e.label)}">${icon(running ? 'pause' : 'play')}</button>
+      <button class="mini-btn" data-pend="${e.id}" data-held="${running ? '' : '1'}" aria-label="Bitir: ${esc(e.label)}">${icon('stop')}</button></li>`;
+  }).join('')}</ul>`;
+}
+
+export function bindParallel(root) {
+  $$('[data-ppause]', root).forEach((b) => { b.onclick = () => { haptic(); act(store.pauseSecondary(b.dataset.ppause)); }; });
+  $$('[data-presume]', root).forEach((b) => { b.onclick = () => { haptic(); act(store.resumeSecondary(b.dataset.presume)); }; });
+  $$('[data-pend]', root).forEach((b) => { b.onclick = () => { haptic(12); act(b.dataset.held ? store.dropPaused(b.dataset.pend) : store.endSecondary(b.dataset.pend)); }; });
 }
 
 const tag = (r) => (r.source === 'manual' ? '<span class="tag">elle</span>' : '');
@@ -135,7 +153,7 @@ export function tickHome() {
 /** Repaint every running duration (elements carrying data-since) under `root`. */
 export function tickSince(root) {
   const now = Date.now();
-  $$('[data-since]', root).forEach((n) => { n.textContent = fmtLive(now - Number(n.dataset.since)); });
+  $$('[data-since]', root).forEach((n) => { n.textContent = fmtLive(Number(n.dataset.base || 0) + now - Number(n.dataset.since)); });
 }
 
 export function bindHome() {

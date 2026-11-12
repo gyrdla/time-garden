@@ -149,3 +149,15 @@ export function editEvent(ev, patch, now = Date.now()) {
   next.updatedAt = now;
   return next;
 }
+
+/** Pausing a parallel record ends this stretch and remembers it can be picked up again. */
+export function pauseEvent(ev, now = Date.now()) {
+  return ev.endedAt != null ? ev : { ...ev, endedAt: now, paused: true, updatedAt: now };
+}
+
+/** Picking it up again starts a new stretch with the same name, attention, task and session. */
+export function resumeEvent(ev, sessionId, now = Date.now()) {
+  const next = startEvent({ label: ev.label, attention: ev.attention, sessionId }, now);
+  if (ev.taskId) next.taskId = ev.taskId;
+  return { old: { ...ev, paused: false, updatedAt: now }, next };
+}

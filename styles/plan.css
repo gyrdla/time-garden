@@ -196,3 +196,29 @@
 .targets .field>span{display:flex;align-items:center;gap:6px}
 @media (max-width:360px){.balance-body{grid-template-columns:1fr;justify-items:center}}
 @media (min-width:700px){.balance-body{grid-template-columns:200px 1fr}.rings-wrap{width:200px;height:200px}}
+
+/* ── parallel records with their own controls ── */
+.par-list{display:grid;gap:4px;margin:var(--s2) 0}
+.par-list li{display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;gap:var(--s2);min-height:40px;padding:0 4px 0 var(--s3);border-radius:var(--r-pill);background:var(--surface-sunk);background:color-mix(in srgb,var(--secondary) 14%,var(--surface-strong))}
+.par-list li.held{background:var(--surface-sunk)}
+.par-list li.held .pulse{animation:none;background:var(--ink-faint)}
+.par-list b{font-size:var(--fs-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.par-list .t{font-size:var(--fs-sm);font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+.mini-btn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--accent-ink)}
+.mini-btn .ic{width:16px;height:16px}
+.mini-btn:active{background:var(--surface-sunk)}
+.pl-par{margin-top:var(--s3);padding-top:var(--s2);border-top:1px solid var(--line-soft)}
+.pl-par>small{font-size:var(--fs-xs);color:var(--ink-soft)}
+
+/* ── unscheduled tasks by project ── */
+.un-group{margin-bottom:var(--s2);border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line)}
+.un-head{display:flex;align-items:center;gap:var(--s2);width:100%;min-height:48px;padding:0 var(--s3);text-align:left}
+.un-head b{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.un-list{display:grid;gap:2px;padding:0 var(--s2) var(--s2)}
+.un-label{padding:6px var(--s2) 2px calc(var(--s2) + var(--d) * 16px);font-size:var(--fs-xs);color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em}
+.un-row{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:var(--s2);min-height:46px;padding-left:calc(var(--d) * 16px);border-radius:var(--r-sm);background:var(--surface-sunk)}
+.un-row .grow{text-align:left;min-width:0;min-height:44px}
+.un-row b{display:block;font-size:var(--fs-sm);font-weight:500;overflow-wrap:anywhere}
+.un-row small{display:block;font-size:var(--fs-xs);color:var(--ink-soft)}
+.un-row.blocked b{color:var(--ink-soft)}
+.un-row .btn{margin-right:4px}

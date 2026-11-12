@@ -13,6 +13,7 @@ import { renderPlanDial } from './dial.js';
 import { balance } from '../core/balance.js';
 import { fileToImage, makeCover } from './camera.js';
 import { projectCardsHtml, bindProjectCards } from './studio.js';
+import { parallelHtml, bindParallel } from './home.js';
 
 let tab = 'day';
 let dayAnchor = Date.now();
@@ -89,15 +90,17 @@ export function afterFinish(session) {
 }
 
 function liveBar(now) {
-  const s = store.activeSession();
-  if (!s) return '';
-  const t = s.taskId && store.getTask(s.taskId), open = store.openEvents();
+  const s = store.activeSession(), par = parallelHtml(now);
+  if (!s && !par) return '';
+  if (!s) return `<section class="card plan-live"><div class="pl-top"><span></span><div><b>Aynı anda</b><small>Ana etkinlik yok</small></div><span></span></div>${par}</section>`;
+  const t = s.taskId && store.getTask(s.taskId);
   const over = t?.estimateMin ? Math.min(100, Math.round((sessionElapsed(s, now) / (t.estimateMin * MIN)) * 100)) : null;
   return `<section class="card plan-live${isPaused(s) ? ' paused' : ''}"><div class="pl-top"><span class="pulse"></span><div><b>${esc(s.name)}</b>
-      <small>${isPaused(s) ? 'Duraklatıldı' : 'Ölçülüyor'}${t?.estimateMin ? ` · tahmin ${t.estimateMin} dk` : ''}${open.length ? ` · aynı anda: ${open.map((e) => `${esc(e.label)} <span data-since="${e.startedAt}">${fmtLive(now - e.startedAt)}</span>`).join(', ')}` : ''}</small></div>
+      <small>${isPaused(s) ? 'Duraklatıldı' : 'Ölçülüyor'}${t?.estimateMin ? ` · tahmin ${t.estimateMin} dk` : ''}</small></div>
       <strong id="planClock">${fmtClock(sessionElapsed(s, now))}</strong></div>
     ${over != null ? `<div class="stack"><i style="--c:var(--accent-2);width:${over}%"></i></div>` : ''}
-    <div class="live-actions"><button class="btn ghost sm" id="plPause">${isPaused(s) ? 'Devam et' : 'Duraklat'}</button><button class="btn sm" id="plFinish">${icon('stop')}Bitir</button></div></section>`;
+    <div class="live-actions"><button class="btn ghost sm" id="plPause">${isPaused(s) ? 'Devam et' : 'Duraklat'}</button><button class="btn sm" id="plFinish">${icon('stop')}Bitir</button></div>
+    ${par ? `<div class="pl-par"><small>Aynı anda</small>${par}</div>` : ''}</section>`;
 }
 
 function bindLive(root) {
@@ -110,7 +113,7 @@ export function tickPlan() {
   const s = store.activeSession(), el = $('#planClock');
   if (s && el) el.textContent = fmtClock(sessionElapsed(s));
   const now = Date.now();
-  $$('#planScreen [data-since]').forEach((n) => { n.textContent = fmtLive(now - Number(n.dataset.since)); });
+  $$('#planScreen [data-since]').forEach((n) => { n.textContent = fmtLive(Number(n.dataset.base || 0) + now - Number(n.dataset.since)); });
 }
 
 /** This week's balance in one line: how many areas reached their target, and the reward. */
@@ -187,16 +190,45 @@ function weekRow(now, selectedIso) {
 /** A draggable chip for a task: drop it on the clock for a time, or on a day for a date. */
 const chip = (t) => `<span class="drag-chip" data-drag="${t.id}" style="--c:${projColor(t.projectId)}"><span class="grip" aria-hidden="true">⠿</span><button data-task="${t.id}">${esc(t.title)}${t.estimateMin ? ` · ${t.estimateMin} dk` : ''}</button></span>`;
 
-function waitingTasks() {
-  const { tasks, projects } = store.state;
-  return projects.filter((p) => !p.archived).map((p) => P.nextStep(tasks, p.id)).filter((t) => t && t.scheduledAt == null && !t.plannedDay);
+const closedGroups = new Set();
+
+/** Every open step with no day yet, in project tree order (parents shown as labels). */
+function unplannedByProject() {
+  const { tasks } = store.state;
+  const projects = store.state.projects.filter((p) => !p.archived).sort((a, b) => (b.life ? 1 : 0) - (a.life ? 1 : 0));
+  const free = (t) => !P.isDone(t, tasks) && t.scheduledAt == null && !t.plannedDay;
+  return projects.map((p) => {
+    const rows = [];
+    const walk = (parentId, depth) => {
+      for (const t of P.childrenOf(tasks, p.id, parentId)) {
+        if (P.isDone(t, tasks)) continue;
+        const kids = tasks.some((k) => k.parentId === t.id);
+        const before = rows.length;
+        if (kids) { rows.push({ t, depth, label: true }); walk(t.id, depth + 1); if (rows.length === before + 1) rows.pop(); }
+        else if (free(t)) rows.push({ t, depth, label: false });
+      }
+    };
+    walk(null, 0);
+    return { p, rows, count: rows.filter((r) => !r.label).length };
+  }).filter((g) => g.count);
+}
+
+function unplannedHtml(action) {
+  const groups = unplannedByProject();
+  if (!groups.length) return `<p class="empty-note">${store.state.projects.length ? 'Açık görevlerinin hepsi bir güne yerleşmiş.' : 'Önce Projeler sekmesinden bir proje ekle.'}</p>`;
+  return groups.map(({ p, rows, count }) => {
+    const shut = closedGroups.has(p.id);
+    return `<div class="un-group"><button class="un-head" data-ugroup="${p.id}" aria-expanded="${!shut}"><span class="dot" style="--c:${catColor(p.category)}"></span><b>${esc(p.name)}</b><span class="chip quiet">${count}</span><span class="fold-ic">${shut ? '▸' : '▾'}</span></button>
+      ${shut ? '' : `<ul class="un-list">${rows.map(({ t, depth, label }) => (label
+        ? `<li class="un-label" style="--d:${Math.min(depth, 4)}">${esc(t.title)}</li>`
+        : `<li class="un-row${P.isBlocked(t, store.state.tasks) ? ' blocked' : ''}" style="--d:${Math.min(depth, 4)}" data-drag="${t.id}"><span class="grip" aria-label="Sürükle">⠿</span>
+          <button class="grow" data-task="${t.id}"><b>${esc(t.title)}</b>${t.estimateMin || P.isBlocked(t, store.state.tasks) ? `<small>${t.estimateMin ? `${t.estimateMin} dk` : ''}${P.isBlocked(t, store.state.tasks) ? `${t.estimateMin ? ' · ' : ''}bekliyor` : ''}</small>` : ''}</button>
+          ${action ? `<button class="btn ghost sm" data-today="${t.id}">${action}</button>` : ''}</li>`)).join('')}</ul>`}</div>`;
+  }).join('');
 }
 
 function waitingTray(title, hint) {
-  const w = waitingTasks();
-  return `<section class="block"><div class="block-head"><h2>${title}</h2></div>
-    ${w.length ? `<div class="tray">${w.map(chip).join('')}</div><p class="hint left">${hint}</p>`
-    : `<p class="empty-note">${store.state.projects.length ? 'Her projenin sıradaki adımı bir güne yerleşmiş.' : 'Önce Projeler sekmesinden bir proje ekle.'}</p>`}</section>`;
+  return `<section class="block"><div class="block-head"><h2>${title}</h2></div>${unplannedHtml('')}<p class="hint left">${hint}</p></section>`;
 }
 
 // ── drag & drop ────────────────────────────────────────────────────────────
@@ -258,10 +290,11 @@ function bindDrag(root) {
 }
 
 function bindCommon(root) {
-  bindLive(root); bindDrag(root); bindDeer(root);
+  bindLive(root); bindParallel(root); bindDrag(root); bindDeer(root);
   $$('[data-day]', root).forEach((b) => { b.onclick = () => { dayAnchor = Number(b.dataset.day); tab = 'day'; renderPlan(); }; });
   $$('[data-task]', root).forEach((b) => { b.onclick = () => openTask(b.dataset.task); });
   $$('[data-start]', root).forEach((b) => { b.onclick = () => startTask(b.dataset.start); });
+  $$('[data-ugroup]', root).forEach((b) => { b.onclick = () => { const id = b.dataset.ugroup; if (closedGroups.has(id)) closedGroups.delete(id); else closedGroups.add(id); renderPlan(); }; });
   $$('[data-today]', root).forEach((b) => { b.onclick = () => pickDay(b.dataset.today, isoDate(tab === 'day' ? dayAnchor : Date.now())); });
   $$('[data-unpick]', root).forEach((b) => { b.onclick = () => act(store.updateTask(b.dataset.unpick, { plannedDay: null })); });
 }
@@ -300,12 +333,8 @@ function dayView(now) {
       ${tray.length ? `<div class="tray">${tray.map((t) => `<span class="drag-chip" data-drag="${t.id}" style="--c:${projColor(t.projectId)}"><span class="grip" aria-hidden="true">⠿</span><button data-task="${t.id}">${esc(t.title)}${t.estimateMin ? ` · ${t.estimateMin} dk` : ''}</button><button class="mini" data-start="${t.id}" aria-label="Başlat">${icon('play')}</button><button class="mini" data-unpick="${t.id}" aria-label="Günden çıkar">×</button></span>`).join('')}</div><p class="hint left">Saat vermek için saatin üstüne sürükle; saat vermeden de başlatabilirsin.</p>`
       : '<p class="empty-note">Saat bekleyen seçili görev yok.</p>'}</section>
     ${items.some((i) => !i.done) ? `<section class="block"><div class="block-head"><h2>Saatli olanlar</h2>${items.some((i) => i.done) ? `<span class="chip quiet">${items.filter((i) => i.done).length} bitti</span>` : ''}</div><div class="flow day-list">${items.filter((i) => !i.done).map(row).join('')}</div></section>` : ''}
-    <section class="block"><div class="block-head"><h2>Projelerde sıradaki adımlar</h2></div>
-      ${waitingTasks().length ? `<div class="flow">${waitingTasks().map((t) => `<div class="flow-item plan-row" data-drag="${t.id}"><span class="bar-c" style="--c:${projColor(t.projectId)}"></span>
-        <button class="grow" data-task="${t.id}"><b>${esc(t.title)}</b><small>${esc(store.getProject(t.projectId)?.name || '')}${t.estimateMin ? ` · ${t.estimateMin} dk` : ''}</small></button>
-        <span class="row-acts"><span class="grip" aria-label="Sürükle">⠿</span><button class="btn ghost sm" data-today="${t.id}">${isToday ? 'Bugün için seç' : 'Bu güne seç'}</button></span></div>`).join('')}</div>`
-      : `<p class="empty-note">${store.state.projects.length ? 'Her projenin sıradaki adımı bir güne yerleşmiş.' : 'Önce Projeler sekmesinden bir proje ekle.'}</p>`}
-    </section>`;
+    <section class="block"><div class="block-head"><h2>Saati olmayan görevler</h2></div>${unplannedHtml(isToday ? 'Bugün' : 'Bu güne')}
+      <p class="hint left">⠿ tutamağından saat kadranına ya da bir güne sürükle.</p></section>`;
 }
 
 function bindDay(root) {

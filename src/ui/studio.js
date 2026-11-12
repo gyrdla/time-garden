@@ -18,6 +18,17 @@ const ideaText = (c) => (c.title || c.text || '').split('\n')[0];
 const cardName = (c) => (c.kind === 'idea' ? ideaText(c) : (c.title || hostOf(c.url)));
 const KIND_IC = { idea: '💡', inspire: '✦', tuto: '🎓' };
 
+/** Live projects grouped under their area headings, in the order the areas first appear. */
+function projectsByArea() {
+  const groups = new Map();
+  for (const p of store.state.projects.filter((x) => !x.archived).sort((a, b) => (b.life ? 1 : 0) - (a.life ? 1 : 0))) {
+    const a = p.area || 'Genel';
+    if (!groups.has(a)) groups.set(a, []);
+    groups.get(a).push(p);
+  }
+  return [...groups];
+}
+
 /** An embedded video, or a plain link card when the link is not a known video. */
 export function embedHtml(url, { compact = false } = {}) {
   const v = parseVideo(url);
@@ -76,7 +87,6 @@ export function renderStudio(force = false) {
 
 // ── drag onto a project or an idea ─────────────────────────────────────────
 function dropBar(card) {
-  const projects = store.state.projects.filter((p) => !p.archived);
   const linked = new Set(linksOf(store.state.cards, card.id));
   const others = store.state.cards.filter((c) => c.id !== card.id);
   const group = (k, title) => {
@@ -85,7 +95,9 @@ function dropBar(card) {
   };
   const bar = document.createElement('div');
   bar.className = 'drop-bar';
-  bar.innerHTML = `<small>Projeler</small><div>${projects.map((p) => `<span class="drop-t${(card.projectIds || []).includes(p.id) ? ' on' : ''}" data-drop-project="${p.id}"><span class="dot" style="--c:${catColor(p.category)}"></span>${esc(p.name)}${(card.projectIds || []).includes(p.id) ? ' ✓' : ''}</span>`).join('') || '<span class="drop-t empty">Önce Plan’da bir proje ekle</span>'}</div>
+  const target = (p) => `<span class="drop-t${(card.projectIds || []).includes(p.id) ? ' on' : ''}" data-drop-project="${p.id}"><span class="dot" style="--c:${catColor(p.category)}"></span>${esc(p.name)}${(card.projectIds || []).includes(p.id) ? ' ✓' : ''}</span>`;
+  bar.innerHTML = `${projectsByArea().map(([area, list]) => `<small>${esc(area)}</small><div>${list.map(target).join('')}</div>`).join('')}
+    <div class="drop-new"><span class="drop-t new" data-drop-new="1">＋ Yeni proje ya da alan</span></div>
     ${group('idea', 'Fikirler')}${group('inspire', 'İlham')}${group('tuto', 'Tuto')}`;
   document.body.appendChild(bar);
   return bar;
@@ -106,7 +118,7 @@ function bindCardDrag(root) {
       const move = (ev) => {
         ghost.style.transform = `translate(${ev.clientX}px,${ev.clientY}px)`;
         ghost.style.visibility = 'hidden';
-        const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-drop-project],[data-drop-card]');
+        const under = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('[data-drop-project],[data-drop-card],[data-drop-new]');
         ghost.style.visibility = '';
         if (hot !== under) { hot?.classList.remove('drop-hot'); hot = under; hot?.classList.add('drop-hot'); }
       };
@@ -116,6 +128,7 @@ function bindCardDrag(root) {
         ghost.remove(); bar.remove();
         if (ev.type !== 'pointerup' || !hot) return;
         haptic(12);
+        if (hot.dataset.dropNew) { openNewProject(card.id); return; }
         if (hot.dataset.dropProject) {
           const pid = hot.dataset.dropProject;
           act(store.setCardProject(card.id, pid, true).then((did) => toast(did ? `${projName(pid)} projesine eklendi` : `Zaten ${projName(pid)} projesinde`)));
@@ -147,7 +160,8 @@ function openCardSheet(id, kind = 'idea') {
     ${k !== 'idea' ? `<label class="field">Video bağlantısı${k === 'tuto' ? ' (isteğe bağlı)' : ''}<input name="url" ${k === 'inspire' ? 'required' : ''} inputmode="url" value="${esc(c?.url || '')}" placeholder="YouTube, Instagram, TikTok, Vimeo…" autocomplete="off"></label>
       ${k === 'inspire' ? `<label class="field">Başlık (isteğe bağlı)<input name="title" maxlength="120" value="${esc(c?.title || '')}" autocomplete="off"></label>` : ''}
       <label class="field">${k === 'tuto' ? 'Nasıl yapılır? (adımlar, dakika, notlar)' : 'Neden etkiledi?'}<textarea name="text" rows="3">${esc(c?.text || '')}</textarea></label>` : ''}
-    <div class="field"><span>Projeler (birden fazla seçebilirsin)</span><div class="chips" id="projPick">${projects.map((p) => `<button type="button" class="chip${(c?.projectIds || []).includes(p.id) ? ' chosen' : ''}" data-pid="${p.id}"><span class="dot" style="--c:${catColor(p.category)}"></span>${esc(p.name)}</button>`).join('') || '<span class="hint">Henüz proje yok</span>'}</div></div>
+    <div class="field"><span>Projeler (birden fazla seçebilirsin)</span><div id="projPick">${projectsByArea().map(([area, list]) => `<small class="area-mini">${esc(area)}</small><div class="chips">${list.map((p) => `<button type="button" class="chip${(c?.projectIds || []).includes(p.id) ? ' chosen' : ''}" data-pid="${p.id}"><span class="dot" style="--c:${catColor(p.category)}"></span>${esc(p.name)}</button>`).join('')}</div>`).join('')}
+      <div class="chips"><button type="button" class="chip add" id="newProj">＋ Yeni proje ya da alan</button></div></div></div>
     ${others.length ? `<div class="field"><span>Bağlı kartlar</span><div class="chips" id="linkPick">${others.map((o) => `<button type="button" class="chip k-${o.kind}${linked.has(o.id) ? ' chosen' : ''}" data-cid="${o.id}">${KIND_IC[o.kind]} ${esc(cardName(o).slice(0, 26))}</button>`).join('')}</div></div>` : ''}
     <p class="form-error" role="alert"></p>
     <div class="sheet-actions"><button class="btn full">Kaydet</button>
@@ -158,6 +172,7 @@ function openCardSheet(id, kind = 'idea') {
   let color = c?.color || 'yellow';
   $$('#colors [data-color]', b).forEach((x) => { x.onclick = () => { color = x.dataset.color; $$('#colors [data-color]', b).forEach((y) => y.classList.toggle('chosen', y === x)); }; });
   const pids = new Set(c?.projectIds || []), want = new Set(linked);
+  $('#newProj', b).onclick = () => openNewProject(c?.id || null, () => openCardSheet(c?.id || null, k));
   $$('#projPick [data-pid]', b).forEach((x) => { x.onclick = () => { const id = x.dataset.pid; if (pids.has(id)) pids.delete(id); else pids.add(id); x.classList.toggle('chosen', pids.has(id)); }; });
   $$('#linkPick [data-cid]', b).forEach((x) => { x.onclick = () => { const id = x.dataset.cid; if (want.has(id)) want.delete(id); else want.add(id); x.classList.toggle('chosen', want.has(id)); }; });
   const input = () => ({ kind: k, title: f.title?.value || '', text: f.text?.value || '', url: f.url?.value || '', color, projectIds: [...pids] });
@@ -177,6 +192,30 @@ function openCardSheet(id, kind = 'idea') {
   };
   const del = $('#del', b);
   if (del) del.onclick = () => { if (confirm('Bu kart silinsin mi?')) run(() => store.removeCard(c.id), 'Silindi'); };
+}
+
+/** Make a project in an existing or a new area, then put the card in it. */
+function openNewProject(cardId, after = null) {
+  const areas = [...new Set(store.state.projects.filter((p) => !p.life).map((p) => p.area).filter(Boolean))];
+  openSheet('Yeni proje', `<form id="np">
+    <label class="field">Proje adı<input name="name" required maxlength="160" autocomplete="off"></label>
+    <div class="field"><span>Hangi alanda?</span><div class="chips" id="npAreas">${areas.map((a, i) => `<button type="button" class="chip${i === 0 ? ' chosen' : ''}" data-area="${esc(a)}">${esc(a)}</button>`).join('')}</div>
+      <input name="area" maxlength="60" placeholder="${areas.length ? 'ya da yeni bir alan yaz' : 'Alan adı, örn. Sosyal medya'}" autocomplete="off" value=""></div>
+    <p class="form-error" role="alert"></p>
+    <div class="sheet-actions"><button class="btn full">${cardId ? 'Projeyi oluştur ve kartı koy' : 'Projeyi oluştur'}</button></div></form>`);
+  const b = $('#sheetBody'), f = $('#np', b);
+  let area = areas[0] || '';
+  $$('#npAreas [data-area]', b).forEach((x) => { x.onclick = () => { area = x.dataset.area; f.area.value = ''; $$('#npAreas [data-area]', b).forEach((y) => y.classList.toggle('chosen', y === x)); }; });
+  f.area.oninput = () => { if (f.area.value.trim()) $$('#npAreas [data-area]', b).forEach((y) => y.classList.remove('chosen')); };
+  f.name.focus();
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    run(async () => {
+      const p = await store.addProject({ name: f.name.value, area: f.area.value.trim() || area });
+      if (cardId) await store.setCardProject(cardId, p.id, true);
+      if (after) setTimeout(after, 0);
+    }, cardId ? 'Proje oluşturuldu, kart içinde' : 'Proje oluşturuldu');
+  };
 }
 
 /** Cards attached to a project, for its detail page. */
