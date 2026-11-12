@@ -79,7 +79,7 @@ function load(d) {
   state.tasks = [...(d.tasks || [])];
   state.routines = [...(d.routines || [])];
   state.routineLog = [...(d.routineLog || [])];
-  state.cards = [...(d.cards || [])].sort((a, b) => b.createdAt - a.createdAt);
+  state.cards = [...(d.cards || [])].map(cardsLib.upgradeCard).sort((a, b) => b.createdAt - a.createdAt);
   state.assets = [...(d.assets || [])].sort((a, b) => a.createdAt - b.createdAt);
   state.settings = { theme: 'pearl', ...(d.settings || {}) };
 }
@@ -426,20 +426,49 @@ export function updateCard(id, patch) {
   return write(db.put('cards', c)).then(() => c);
 }
 
-/** Removing an idea keeps the videos and tutorials that were attached to it. */
+/** Removing a card removes its links; the cards it was linked with stay. */
 export function removeCard(id) {
-  const freed = state.cards.filter((c) => c.ideaId === id).map((c) => ({ ...c, ideaId: null, updatedAt: Date.now() }));
+  const freed = state.cards.filter((c) => c.id !== id && (c.links || []).includes(id)).map((c) => ({ ...c, links: c.links.filter((x) => x !== id), updatedAt: Date.now() }));
   state.cards = state.cards.filter((c) => c.id !== id).map((c) => freed.find((f) => f.id === c.id) || c);
   emit('cards');
   return write(db.batch([{ store: 'cards', del: id }, ...freed.map((c) => ({ store: 'cards', put: c }))]));
 }
 
-/** Turn an idea into a task of a project; the post-it stays, linked to that project. */
+function putCards(list) {
+  list.forEach((c) => { state.cards[state.cards.findIndex((x) => x.id === c.id)] = c; });
+  emit('cards');
+  return write(db.batch(list.map((c) => ({ store: 'cards', put: c }))));
+}
+
+/** Link two cards (many-to-many). Linking twice does nothing. */
+export function linkCards(a, b) {
+  if (a === b || cardsLib.areLinked(state.cards, a, b)) return Promise.resolve(false);
+  const c = getCard(a);
+  if (!c || !getCard(b)) return Promise.resolve(false);
+  return putCards([{ ...c, links: [...(c.links || []), b], updatedAt: Date.now() }]).then(() => true);
+}
+
+export function unlinkCards(a, b) {
+  const changed = [a, b].map(getCard).filter((c) => c && (c.links || []).includes(c.id === a ? b : a))
+    .map((c) => ({ ...c, links: c.links.filter((x) => x !== (c.id === a ? b : a)), updatedAt: Date.now() }));
+  return changed.length ? putCards(changed) : Promise.resolve();
+}
+
+/** Add or remove a card from a project (a card can be in several projects). */
+export function setCardProject(id, projectId, on) {
+  const c = getCard(id);
+  if (!c) return Promise.resolve(false);
+  const has = (c.projectIds || []).includes(projectId);
+  if (has === on) return Promise.resolve(false);
+  return putCards([{ ...c, projectIds: on ? [...c.projectIds, projectId] : c.projectIds.filter((x) => x !== projectId), updatedAt: Date.now() }]).then(() => true);
+}
+
+/** Turn an idea into a task of a project; the post-it stays, now also in that project. */
 export function ideaToTask(id, projectId) {
   const c = getCard(id);
   if (!c) return Promise.resolve(null);
   return addTask({ projectId, title: (c.title || c.text).split('\n')[0].slice(0, 160), how: c.title ? c.text : '' })
-    .then((t) => updateCard(id, { projectId }).then(() => t));
+    .then((t) => setCardProject(id, projectId, true).then(() => t));
 }
 
 // ── settings ───────────────────────────────────────────────────────────────

@@ -1,8 +1,10 @@
 // Studio cards: ideas (post-its), inspiration videos and tutorials. Pure helpers.
 //
-// Card { id, kind:'idea'|'inspire'|'tuto', title, text, url, color, projectId|null, ideaId|null,
+// Card { id, kind:'idea'|'inspire'|'tuto', title, text, url, color, projectIds:[], links:[cardId],
 //        createdAt, updatedAt }
-// A card can be linked to a project, and inspiration / tutorial cards also to an idea.
+// Links are many-to-many: one idea can use several tutorials, one tutorial can serve several
+// ideas, and any card can belong to several projects. A link is stored on one of the two cards
+// and read from both sides.
 
 import { uid, ValidationError } from './tracker.js';
 
@@ -53,21 +55,44 @@ function cleanUrl(url, required) {
   return u.href;
 }
 
-export function newCard({ kind, title = '', text = '', url = '', color = 'yellow', projectId = null, ideaId = null }, now = Date.now()) {
+const ids = (v) => [...new Set((Array.isArray(v) ? v : []).filter((x) => typeof x === 'string' && x))];
+
+export function newCard({ kind, title = '', text = '', url = '', color = 'yellow', projectIds = [], links = [], projectId = null, ideaId = null }, now = Date.now()) {
   if (!KINDS.includes(kind)) throw new ValidationError('Kart türü geçersiz.');
   const c = { id: uid(), kind, title: clean(title, 120), text: clean(text, 2000), url: cleanUrl(url, kind === 'inspire'),
-    color: POSTIT.includes(color) ? color : 'yellow', projectId: projectId || null, ideaId: kind === 'idea' ? null : (ideaId || null), createdAt: now, updatedAt: now };
+    color: POSTIT.includes(color) ? color : 'yellow',
+    projectIds: ids([...(projectIds || []), projectId]), links: ids([...(links || []), ideaId]), createdAt: now, updatedAt: now };
   if (kind === 'idea' && !c.text && !c.title) throw new ValidationError('Fikrini yaz.');
   if (kind === 'tuto' && !c.title) throw new ValidationError('Neyin tutorial’ı olduğunu yaz (örn. Glitch efekti).');
   return c;
 }
 
+/** Bring a stored card up to the current shape (older cards had one projectId / ideaId). */
+export function upgradeCard(c) {
+  if (Array.isArray(c.projectIds) && Array.isArray(c.links)) return c;
+  const { projectId, ideaId, ...rest } = c;
+  return { ...rest, projectIds: ids([...(c.projectIds || []), projectId]), links: ids([...(c.links || []), ideaId]) };
+}
+
 export function editCard(card, patch, now = Date.now()) {
-  const merged = { ...card, ...patch, kind: card.kind };
-  const next = newCard(merged, now);
+  const base = upgradeCard(card);
+  const next = newCard({ ...base, ...patch, kind: base.kind, projectId: null, ideaId: null }, now);
   return { ...next, id: card.id, createdAt: card.createdAt };
 }
 
-/** Cards attached to a project or to an idea. */
-export const linkedTo = (cards, { projectId, ideaId }) =>
-  cards.filter((c) => (projectId && c.projectId === projectId) || (ideaId && c.ideaId === ideaId));
+/** Ids of every card linked with `id`, from either side. */
+export function linksOf(cards, id) {
+  const me = cards.find((c) => c.id === id);
+  const out = new Set((me?.links || []).filter((x) => x !== id && cards.some((c) => c.id === x)));
+  for (const c of cards) if (c.id !== id && (c.links || []).includes(id)) out.add(c.id);
+  return [...out];
+}
+
+export const areLinked = (cards, a, b) => linksOf(cards, a).includes(b);
+
+/** Cards in a project, or cards linked with a card. */
+export const linkedTo = (cards, { projectId, cardId }) => {
+  if (projectId) return cards.filter((c) => (c.projectIds || []).includes(projectId));
+  const set = new Set(linksOf(cards, cardId));
+  return cards.filter((c) => set.has(c.id));
+};

@@ -27,13 +27,24 @@ test('cards validate by kind and keep links', () => {
   assert.throws(() => C.newCard({ kind: 'inspire', url: 'javascript:alert(1)' }), ValidationError);
   assert.throws(() => C.newCard({ kind: 'tuto', url: 'https://youtu.be/dQw4w9WgXcQ' }), ValidationError);
   const i = C.newCard({ kind: 'idea', text: 'Kahve reels', color: 'pink' });
-  const v = C.newCard({ kind: 'inspire', url: 'youtu.be/dQw4w9WgXcQ', ideaId: i.id });
+  const i2 = C.newCard({ kind: 'idea', text: 'Laboratuvar vlog' });
+  const v = C.newCard({ kind: 'inspire', url: 'youtu.be/dQw4w9WgXcQ', links: [i.id] });
   assert.equal(v.url, 'https://youtu.be/dQw4w9WgXcQ');
-  const t = C.newCard({ kind: 'tuto', title: 'Glitch efekti', url: 'https://youtu.be/dQw4w9WgXcQ', projectId: 'p1' });
-  assert.deepEqual(C.linkedTo([i, v, t], { ideaId: i.id }).map((c) => c.kind), ['inspire']);
-  assert.deepEqual(C.linkedTo([i, v, t], { projectId: 'p1' }).map((c) => c.kind), ['tuto']);
-  const moved = C.editCard(i, { projectId: 'p1', ideaId: 'x' });
-  assert.deepEqual([moved.id, moved.projectId, moved.ideaId, moved.kind], [i.id, 'p1', null, 'idea']);
+  // one tutorial used by two ideas, and in two projects
+  const t = { ...C.newCard({ kind: 'tuto', title: 'Glitch efekti', projectIds: ['p1', 'p2'] }), links: [i.id, i2.id] };
+  const g2 = { ...C.newCard({ kind: 'tuto', title: 'Ses geçişi' }) };
+  const i3 = { ...i, links: [g2.id] };                                     // the idea also uses a second tutorial (stored on the idea)
+  const all = [i3, i2, v, t, g2];
+  assert.deepEqual(C.linkedTo(all, { cardId: i.id }).map((c) => c.id).sort(), [v.id, t.id, g2.id].sort());
+  assert.deepEqual(C.linkedTo(all, { cardId: t.id }).map((c) => c.id).sort(), [i.id, i2.id].sort());
+  assert.deepEqual(C.linksOf(all, g2.id), [i.id]);                         // read from the other side
+  assert.ok(C.areLinked(all, t.id, i2.id) && !C.areLinked(all, v.id, i2.id));
+  assert.deepEqual(C.linkedTo(all, { projectId: 'p2' }).map((c) => c.id), [t.id]);
+  const old = { id: 'o', kind: 'tuto', title: 'Eski', projectId: 'p1', ideaId: i.id, createdAt: 1, updatedAt: 1 };
+  const up = C.upgradeCard(old);
+  assert.deepEqual([up.projectIds, up.links, 'projectId' in up], [['p1'], [i.id], false]);
+  const moved = C.editCard(old, { projectIds: ['p1', 'p3'] });
+  assert.deepEqual([moved.id, moved.projectIds, moved.links], ['o', ['p1', 'p3'], [i.id]]);
   const back = normalizeImport({ app: 'time-garden', schema: 5, sessions: [], cards: [i, { id: 'bad', kind: 'x' }] });
   assert.deepEqual(back.cards.map((c) => c.id), [i.id]);
 });

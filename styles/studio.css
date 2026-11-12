@@ -51,3 +51,8 @@
 .drop-t.drop-hot{outline:3px dashed var(--secondary);outline-offset:2px;border-radius:var(--r-pill)}
 .drop-t.empty{color:var(--ink-soft)}
 @media (min-width:700px){.postit{width:190px;min-height:190px}.vcard{width:230px}.card-row.inspire .vcard{width:250px}}
+.drop-bar>small+div{margin-bottom:var(--s3)}
+.drop-t.on{background:var(--cta);color:var(--on-accent)}
+.drop-t.card.p-yellow,.drop-t.card.p-pink,.drop-t.card.p-lilac,.drop-t.card.p-mint,.drop-t.card.p-sky{color:#3d3530}
+.drop-t.card.on{outline:2px solid var(--accent-ink)}
+#linkPick .chip,#projPick .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
