@@ -377,6 +377,8 @@ function bindPeriod(root, kind) {
 }
 
 // ── projects ───────────────────────────────────────────────────────────────
+const LIFE_CATS = ['Kişisel', 'Ev işleri', 'Sosyal', 'Çalışma', 'Öğrenme', 'Dinlenme'];
+let lifeCat = LIFE_CATS[0];
 const fmtMin = (m) => (m ? fmtDur(m * MIN) : '—');
 
 export const COVERS = [['pearl', 'Sedef'], ['croc', 'Siyah deri'], ['dalmatian', 'Benekli'], ['zebra', 'Zebra'], ['fawn', 'Ceylan'], ['metal', 'Metal'], ['tiger', 'Kaplan']];
@@ -391,10 +393,12 @@ function coverStyle(cover) {
 }
 
 function projectsView() {
-  const { projects, tasks, sessions, events } = store.state;
+  const { tasks, sessions, events } = store.state;
+  const projects = store.state.projects.filter((p) => !p.life);
   const live = projects.filter((p) => !p.archived);
+  const lifeTop = lifeCard();
   if (!projects.length) {
-    return `<p class="empty-note" style="margin-bottom:var(--s4)">Her projen burada ayrı bir klasör. Projeyi ekle, görevlerini yaz, değnekle adımlara böl, sonra günlere ve saatlere yerleştir.</p>
+    return `${lifeTop}<p class="empty-note" style="margin:var(--s4) 0">Her projen burada ayrı bir klasör. Projeyi ekle, görevlerini yaz, değnekle adımlara böl, sonra günlere ve saatlere yerleştir.</p>
       <button class="btn full" id="addProject">${icon('plus')}İlk projeni ekle</button>`;
   }
   const areas = [...new Set(live.map((p) => p.area))];
@@ -406,10 +410,21 @@ function projectsView() {
       <span class="folder-bar"><i style="width:${Math.round(pr.pct * 100)}%"></i></span></button>`;
   };
   const archived = projects.filter((p) => p.archived);
-  return `${deerCard(Date.now())}${areas.map((a) => `<h2 class="section-h area-h">${esc(a)}</h2><div class="folders">${live.filter((p) => p.area === a).map(folder).join('')}</div>`).join('')}
+  return `${deerCard(Date.now())}${lifeTop}${areas.map((a) => `<h2 class="section-h area-h">${esc(a)}</h2><div class="folders">${live.filter((p) => p.area === a).map(folder).join('')}</div>`).join('')}
     <p class="hint">Klasöre dokununca açılır; kapağını değiştirmek için basılı tut.</p>
     <button class="btn ghost full" id="addProject">${icon('plus')}Proje ekle</button>
     ${archived.length ? `<h2 class="section-h area-h">Arşiv</h2><div class="folders">${archived.map(folder).join('')}</div>` : ''}`;
+}
+
+/** "Hayatım": everyday things that are not a project, grouped by area. */
+function lifeCard() {
+  const p = store.lifeProject(), { tasks } = store.state;
+  const open = p ? tasks.filter((t) => t.projectId === p.id && !P.isDone(t, tasks)) : [];
+  const by = {};
+  for (const t of open) by[t.category || 'Kişisel'] = (by[t.category || 'Kişisel'] || 0) + 1;
+  return `<section class="card life" id="openLife"><div class="card-head"><h2>Hayatım</h2><span class="chip quiet">${open.length ? `${open.length} açık iş` : 'boş'}</span></div>
+    <p>Kahvaltı, ev, arkadaşlar, mail… proje olmayan her şey burada. Düzenli yapmak istediklerini buradan alışkanlık zincirine gönderebilirsin.</p>
+    ${Object.keys(by).length ? `<div class="tray" style="margin-top:var(--s2)">${Object.entries(by).map(([c, n]) => `<span class="chip"><span class="dot" style="--c:${catColor(c)}"></span>${esc(c)} · ${n}</span>`).join('')}</div>` : ''}</section>`;
 }
 
 function taskRow(t, depth) {
@@ -419,7 +434,7 @@ function taskRow(t, depth) {
   const spent = P.actualMs(t.id, sessions, events), dep = t.dependsOn && store.getTask(t.dependsOn);
   const when = t.scheduledAt != null ? whenText(t.scheduledAt) : (t.plannedDay ? `${t.plannedDay === todayIso() ? 'bugün' : dayText(t.plannedDay)} (saat yok)` : '');
   const meta = [kids.length ? `${kids.filter((k) => P.isDone(k, tasks)).length}/${kids.length} adım` : '', t.estimateMin ? `${t.estimateMin} dk` : '', spent ? `ölçülen ${fmtDur(spent)}` : '',
-    when, blocked && dep ? `bekliyor: ${esc(dep.title)}` : (dep ? `sonra: ${esc(dep.title)}` : ''), t.parallel ? 'aynı anda' : ''].filter(Boolean).join(' · ');
+    t.category && store.getProject(t.projectId)?.life ? esc(t.category) : '', when, blocked && dep ? `bekliyor: ${esc(dep.title)}` : (dep ? `sonra: ${esc(dep.title)}` : ''), t.parallel ? 'aynı anda' : ''].filter(Boolean).join(' · ');
   const isOpen = !collapsed.has(t.id), picked = t.plannedDay === todayIso();
   return `<li class="t-row${done ? ' done' : ''}${blocked ? ' blocked' : ''}" style="--d:${Math.min(depth, 4)}">
       <button class="t-check" data-toggle="${t.id}" role="checkbox" aria-checked="${done}" aria-label="${done ? 'Geri al' : 'Tamamla'}: ${esc(t.title)}">${done ? '✓' : ''}</button>
@@ -434,19 +449,22 @@ function projectDetail(p, now) {
   const { tasks, sessions, events } = store.state;
   const pr = P.progress(tasks, p.id), st = P.stage(pr.pct), roots = P.childrenOf(tasks, p.id, null);
   const planned = P.leaves(tasks, p.id).reduce((n, t) => n + (t.estimateMin || 0), 0), spent = P.projectActualMs(p.id, tasks, sessions, events);
-  return `${liveBar(now)}<div class="period-nav"><button class="icon-btn sm" id="projBack" aria-label="Projelere dön">${icon('back')}</button><div><b>${esc(p.name)}</b><small>${esc(p.area)} · ${esc(p.category)}</small></div><button class="icon-btn sm" id="projEdit" aria-label="Projeyi düzenle">✎</button></div>
+  return `${liveBar(now)}<div class="period-nav"><button class="icon-btn sm" id="projBack" aria-label="Projelere dön">${icon('back')}</button><div><b>${esc(p.name)}</b><small>${esc(p.area)} · ${esc(p.category)}</small></div>${p.life ? '<span style="width:36px"></span>' : '<button class="icon-btn sm" id="projEdit" aria-label="Projeyi düzenle">✎</button>'}</div>
     <section class="card game"><div class="card-head"><h2><span class="stage">${st.icon}</span>${st.name}</h2><span class="chip quiet">${pr.done}/${pr.total} adım</span></div>
       <div class="stack"><i style="--c:${catColor(p.category)};width:${Math.round(pr.pct * 100)}%"></i></div>
       <p>Tahmin ${fmtMin(planned)} · Ölçülen ${spent ? fmtDur(spent) : '—'}</p>${p.note ? `<p>${esc(p.note)}</p>` : ''}</section>
     <ul class="tree">${roots.map((t) => taskRow(t, 0)).join('') || `<li class="empty-note">${pr.total ? 'Bu projedeki tüm adımlar bitti ve hazine sandığında.' : 'Bu projede henüz görev yok. Aşağıya yaz ya da adımlara böl.'}</li>`}</ul>
     ${pr.done ? `<p class="hint left">Biten ${pr.done} adım hazine sandığında duruyor.</p>` : ''}
-    <form class="quick-add" id="quickAdd"><input name="title" placeholder="Yeni görev yaz, Enter'a bas" maxlength="160" autocomplete="off" aria-label="Yeni görev"><button class="icon-btn sm" aria-label="Ekle">${icon('plus')}</button></form>
-    <button class="btn ghost full" id="projBreak">${icon('spark')}Projeyi adımlara böl</button>`;
+    ${p.life ? `<div class="chips" id="lifeCats">${LIFE_CATS.map((c, i) => `<button type="button" class="chip${i === 0 ? ' chosen' : ''}" data-cat="${esc(c)}"><span class="dot" style="--c:${catColor(c)}"></span>${esc(c)}</button>`).join('')}</div>` : ''}
+    <form class="quick-add" id="quickAdd"><input name="title" placeholder="${p.life ? 'Örn. Arkadaşımı ara, Çamaşır, Mail' : 'Yeni görev yaz, Enter\'a bas'}" maxlength="160" autocomplete="off" aria-label="Yeni görev"><button class="icon-btn sm" aria-label="Ekle">${icon('plus')}</button></form>
+    ${p.life ? '' : `<button class="btn ghost full" id="projBreak">${icon('spark')}Projeyi adımlara böl</button>`}`;
 }
 
 function bindProjects(root) {
   const add = $('#addProject', root);
   if (add) add.onclick = () => openProjectSheet();
+  const life = $('#openLife', root);
+  if (life) life.onclick = () => act(store.ensureLife().then((lp) => { openProject = lp.id; renderPlan(); window.scrollTo(0, 0); }));
   $$('[data-project]', root).forEach((b) => {
     // Tap opens the project; pressing and holding opens the cover picker instead.
     let timer = 0, held = false, sx = 0, sy = 0;
@@ -472,13 +490,19 @@ function bindProjects(root) {
   if (!openProject) return;
   const p = store.getProject(openProject);
   $('#projBack', root).onclick = () => { openProject = null; renderPlan(); };
-  $('#projEdit', root).onclick = () => openProjectSheet(p.id);
-  $('#projBreak', root).onclick = () => openBreakdown({ projectId: p.id, id: null, title: p.name });
+  const pe = $('#projEdit', root);
+  if (pe) pe.onclick = () => openProjectSheet(p.id);
+  const pb = $('#projBreak', root);
+  if (pb) pb.onclick = () => openBreakdown({ projectId: p.id, id: null, title: p.name });
+  $$('#lifeCats [data-cat]', root).forEach((b) => {
+    b.classList.toggle('chosen', b.dataset.cat === lifeCat);
+    b.onclick = () => { lifeCat = b.dataset.cat; $$('#lifeCats [data-cat]', root).forEach((x) => x.classList.toggle('chosen', x === b)); };
+  });
   $('#quickAdd', root).onsubmit = (e) => {
     e.preventDefault();
     const title = e.target.title.value;
     if (!title.trim()) return;
-    act(store.addTask({ projectId: p.id, title }).then(() => { const i = $('#quickAdd input'); if (i) i.focus(); }));
+    act(store.addTask({ projectId: p.id, title, ...(p.life ? { category: lifeCat } : {}) }).then(() => { const i = $('#quickAdd input'); if (i) i.focus(); }));
   };
   $$('[data-toggle]', root).forEach((b) => { b.onclick = () => toggleTask(b.dataset.toggle, b); });
   $$('[data-break]', root).forEach((b) => { b.onclick = () => openBreakdown(store.getTask(b.dataset.break)); });
@@ -580,6 +604,7 @@ export function openTask(id) {
   openSheet('Görev', `<form id="f">
     <label class="field">Ne?<input name="title" required maxlength="160" value="${esc(t.title)}" autocomplete="off"></label>
     <label class="field">Nasıl? (yöntem, malzeme, not)<textarea name="how" rows="2" placeholder="Örn. doğal ışık, 9:16, üç plan">${esc(t.how)}</textarea></label>
+    ${p?.life ? `<label class="field">Alan<select name="cat">${CATEGORIES.map((c) => `<option${c === (t.category || 'Kişisel') ? ' selected' : ''}>${c}</option>`).join('')}</select></label>` : ''}
     <label class="field">Tahmini süre (dakika)<input name="est" type="number" inputmode="numeric" min="1" max="1440" value="${t.estimateMin ?? ''}" placeholder="30"></label>
     ${hist ? `<div class="chips"><button type="button" class="chip" data-est="${hist.minutes}">Bu iş sende genelde ${hist.minutes} dk sürüyor (${hist.samples} kayıt)</button></div>` : ''}
     <label class="field">Ne zaman? (saatli)<input name="when" type="datetime-local" value="${t.scheduledAt != null ? toLocalInput(t.scheduledAt) : ''}"></label>
@@ -592,6 +617,7 @@ export function openTask(id) {
     <p class="form-error" role="alert"></p>
     <div class="sheet-actions"><button class="btn full">Kaydet</button>
     <div class="field-row"><button type="button" class="btn ghost" id="tStart">${icon('play')}Başlat</button><button type="button" class="btn ghost" id="tBreak">${icon('spark')}Adımlara böl</button></div>
+    ${p?.life ? '<button type="button" class="btn ghost full" id="tHabit">↻ Düzenli yapmak istiyorum: alışkanlık zincirine gönder</button>' : ''}
     <button type="button" class="btn ghost full" id="tSub">＋ Alt adım ekle</button>
     ${kids ? '<button type="button" class="btn ghost full" id="tTpl">Bu adımları şablon olarak kaydet</button>' : ''}
     <button type="button" class="btn danger full" id="del">Görevi sil</button></div></form>`);
@@ -599,10 +625,12 @@ export function openTask(id) {
   $$('[data-est]', body()).forEach((b) => { b.onclick = () => { f.est.value = b.dataset.est; }; });
   $$('[data-slot]', body()).forEach((b) => { b.onclick = () => { f.when.value = b.dataset.slot ? toLocalInput(Number(b.dataset.slot)) : ''; }; });
   $$('[data-pick]', body()).forEach((b) => { b.onclick = () => { f.day.value = b.dataset.pick; if (!b.dataset.pick) f.when.value = ''; }; });
-  const patch = () => ({ title: f.title.value, how: f.how.value, estimateMin: f.est.value, plannedDay: f.day.value || null, scheduledAt: f.when.value ? fromLocalInput(f.when.value) : null, dependsOn: f.dep.value || null, parallel: f.par.checked });
+  const patch = () => ({ ...(f.cat ? { category: f.cat.value } : {}), title: f.title.value, how: f.how.value, estimateMin: f.est.value, plannedDay: f.day.value || null, scheduledAt: f.when.value ? fromLocalInput(f.when.value) : null, dependsOn: f.dep.value || null, parallel: f.par.checked });
   f.onsubmit = (e) => { e.preventDefault(); run(() => store.updateTask(t.id, patch()), 'Kaydedildi'); };
   $('#tStart', body()).onclick = () => run(() => store.updateTask(t.id, patch()).then(() => store.startTask(t.id)), 'Zaman ölçümü başladı');
   $('#tBreak', body()).onclick = () => openBreakdown(store.getTask(t.id));
+  const th = $('#tHabit', body());
+  if (th) th.onclick = () => run(() => store.updateTask(t.id, patch()).then(() => store.taskToHabit(t.id)).then((r) => toast(r.status === 'active' ? `“${r.title}” alışkanlık oldu; şimdi onun üzerinde çalışıyorsun` : `“${r.title}” alışkanlık zincirinde sıraya girdi`)));
   $('#tSub', body()).onclick = () => {
     const title = prompt('Alt adım:');
     if (title && title.trim()) run(() => store.addTask({ projectId: t.projectId, parentId: t.id, title }), 'Alt adım eklendi');
@@ -666,6 +694,7 @@ function openRoutine(id = null) {
     ${r ? `<p class="hint" style="text-align:left;margin-top:0">${label[status]}</p>` : (willQueue ? '<p class="hint" style="text-align:left;margin-top:0">Şu an başka bir alışkanlık üzerinde çalışıyorsun; bu sıraya eklenecek.</p>' : '')}
     <label class="field">Ne?<input name="title" required maxlength="160" value="${esc(r?.title || '')}" autocomplete="off"></label>
     <div class="days" role="group" aria-label="Günler">${WEEKDAYS.map((d, i) => `<label><input type="checkbox" name="d${i}"${!r || r.days.includes(i) ? ' checked' : ''}><span>${d}</span></label>`).join('')}</div>
+    <label class="field">Alan (denge halkasında bu alana sayılır)<select name="cat">${CATEGORIES.map((c) => `<option${c === (r?.category || 'Kişisel') ? ' selected' : ''}>${c}</option>`).join('')}</select></label>
     <div class="field"><span>Günde hangi saatlerde? (sabah ve akşam gibi birden fazla olabilir)</span><div class="times" id="times"></div>
       <button type="button" class="chip add" id="addTime">＋ Saat ekle</button></div>
     <label class="field">Her seferi kaç dakika?<input type="number" inputmode="numeric" name="est" min="1" max="1440" value="${r?.estimateMin || 30}"></label>
@@ -689,7 +718,7 @@ function openRoutine(id = null) {
   $('#addTime', body()).onclick = () => addTime('21:00');
   f.onsubmit = (e) => {
     e.preventDefault();
-    const input = { title: f.title.value, days: WEEKDAYS.map((_, i) => i).filter((i) => f['d' + i].checked), times: $$('#times input', body()).map((i) => i.value).filter(Boolean), estimateMin: f.est.value, parallel: f.par.checked };
+    const input = { title: f.title.value, days: WEEKDAYS.map((_, i) => i).filter((i) => f['d' + i].checked), times: $$('#times input', body()).map((i) => i.value).filter(Boolean), category: f.cat.value, estimateMin: f.est.value, parallel: f.par.checked };
     if (f.target) input.targetDays = f.target.value;
     run(() => (r ? store.updateRoutine(r.id, { ...input, ...(f.active ? { active: f.active.checked } : {}) }) : store.addRoutine(input)), r ? 'Kaydedildi' : (willQueue ? 'Sıraya eklendi' : 'Alışkanlık başladı'));
   };

@@ -188,7 +188,7 @@ export function fmtDur(ms) {
   if (ms > 0 && ms < MIN) return `${Math.max(1, Math.round(ms / 1000))} sn`;
   const m = Math.round(ms / MIN);
   const h = Math.floor(m / 60);
-  return h ? `${h} sa ${m % 60} dk` : `${m} dk`;
+  return h ? (m % 60 ? `${h} sa ${m % 60} dk` : `${h} sa`) : `${m} dk`;
 }
 
 export function fmtClock(ms) {

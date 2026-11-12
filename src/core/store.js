@@ -215,6 +215,23 @@ const byId = (list, id) => list.find((r) => r.id === id) || null;
 export const getProject = (id) => byId(state.projects, id);
 export const getTask = (id) => byId(state.tasks, id);
 export const getRoutine = (id) => byId(state.routines, id);
+export const lifeProject = () => state.projects.find((p) => p.life) || null;
+
+/** "Hayatım": the one place for everyday things that are not projects. Created on first use. */
+export function ensureLife() {
+  const cur = lifeProject();
+  if (cur) return Promise.resolve(cur);
+  const p = planner.newProject({ name: 'Hayatım', area: 'Hayatım', category: 'Kişisel', life: true });
+  state.projects.push(p); emit('plan');
+  return write(db.put('projects', p)).then(() => p);
+}
+
+/** Turn a one-off life task into a habit for the chain; the task itself is removed. */
+export function taskToHabit(id) {
+  const t = getTask(id);
+  if (!t) return Promise.resolve(null);
+  return addRoutine({ title: t.title, category: t.category || 'Kişisel', estimateMin: t.estimateMin || 30 }).then((r) => removeTask(id).then(() => r));
+}
 function putIn(list, rec) { const i = list.findIndex((r) => r.id === rec.id); if (i >= 0) list[i] = rec; else list.push(rec); }
 
 export function addProject(input) {
@@ -294,7 +311,7 @@ export function startTask(id) {
     if (!t.parallel) throw new tracker.ValidationError('Şu an başka bir etkinlik sürüyor. Önce onu bitir ya da bu görevi “aynı anda yapılabilir” olarak işaretle.');
     return startSecondary({ label: t.title, taskId: id });
   }
-  return start({ name: t.title, category: p?.category || 'Diğer', taskId: id });
+  return start({ name: t.title, category: t.category || p?.category || 'Diğer', taskId: id });
 }
 
 /** A new habit starts right away only if nothing is being built; otherwise it waits in the queue. */

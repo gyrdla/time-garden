@@ -23,21 +23,22 @@ function need(v, what) {
 }
 const minutes = (v) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n > 0 ? Math.min(n, 24 * 60) : null; };
 
-export function newProject({ name, area = '', category = 'Çalışma', note = '', cover = null }, now = Date.now()) {
+export function newProject({ name, area = '', category = 'Çalışma', note = '', cover = null, life = false }, now = Date.now()) {
   return { id: uid(), name: need(name, 'Proje adı'), area: String(area || '').trim().slice(0, 60) || 'Genel',
-    category: CATEGORIES.includes(category) ? category : 'Diğer', note: String(note || ''), cover: typeof cover === 'string' && /^(preset|asset):[\w-]+$/.test(cover) ? cover : null, archived: false, createdAt: now, updatedAt: now };
+    category: CATEGORIES.includes(category) ? category : 'Diğer', note: String(note || ''), cover: typeof cover === 'string' && /^(preset|asset):[\w-]+$/.test(cover) ? cover : null, life: !!life, archived: false, createdAt: now, updatedAt: now };
 }
 
-export function newTask({ projectId, parentId = null, title, how = '', estimateMin = null, scheduledAt = null, dependsOn = null, parallel = false, order = 0, plannedDay = null }, now = Date.now()) {
+export function newTask({ projectId, parentId = null, title, how = '', estimateMin = null, scheduledAt = null, dependsOn = null, parallel = false, order = 0, plannedDay = null, category = null }, now = Date.now()) {
   if (!projectId) throw new ValidationError('Görev bir projeye bağlı olmalı.');
   return { id: uid(), projectId, parentId, title: need(title, 'Görev adı'), how: String(how || ''), estimateMin: minutes(estimateMin),
-    scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : null, plannedDay: Number.isFinite(scheduledAt) ? isoDate(scheduledAt) : (plannedDay || null), dependsOn, parallel: !!parallel, done: false, doneAt: null, order, createdAt: now, updatedAt: now };
+    scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : null, plannedDay: Number.isFinite(scheduledAt) ? isoDate(scheduledAt) : (plannedDay || null), category: CATEGORIES.includes(category) ? category : null, dependsOn, parallel: !!parallel, done: false, doneAt: null, order, createdAt: now, updatedAt: now };
 }
 
 export function editTask(task, patch, tasks, now = Date.now()) {
   const next = { ...task };
   if ('title' in patch) next.title = need(patch.title, 'Görev adı');
   if ('how' in patch) next.how = String(patch.how || '');
+  if ('category' in patch) next.category = CATEGORIES.includes(patch.category) ? patch.category : null;
   if ('estimateMin' in patch) next.estimateMin = minutes(patch.estimateMin);
   if ('plannedDay' in patch) next.plannedDay = /^\d{4}-\d{2}-\d{2}$/.test(patch.plannedDay || '') ? patch.plannedDay : null;
   if ('scheduledAt' in patch) {

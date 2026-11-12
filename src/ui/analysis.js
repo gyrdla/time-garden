@@ -6,6 +6,10 @@ import * as store from '../core/store.js';
 import { fmtDur, fmtTime } from '../core/time.js';
 import { analyze, shiftPeriod, peakWindow } from '../core/analytics.js';
 import { renderDial } from './dial.js';
+import { balance, review, neglect } from '../core/balance.js';
+import { CATEGORIES } from '../core/tracker.js';
+import { openSheet, run } from './sheets.js';
+import { DAY } from '../core/time.js';
 import { flowHtml, bindFlow } from './home.js';
 
 let kind = 'day';
@@ -72,8 +76,10 @@ export function renderAnalysis() {
   $('#analysisTitle').textContent = t;
   $('#analysisSub').textContent = sub;
   const body = $('#analysisBody');
+  const life = lifeCards(a.range, now);
   if (!a.hasData) {
-    body.innerHTML = '<p class="empty-note" style="margin-bottom:var(--s4)">Bu dönemde kayıt yok. Zaman kaydettikçe analiz burada oluşur; eksik veriden tahmin üretilmez.</p>';
+    body.innerHTML = life + '<p class="empty-note" style="margin-bottom:var(--s4)">Bu dönemde ölçülmüş zaman yok. Zaman kaydettikçe analiz burada oluşur; eksik veriden tahmin üretilmez.</p>';
+    bindLife(body);
     return;
   }
   const s = a.sum, prevLabel = { day: 'Dün', week: 'Geçen hafta', month: 'Geçen ay', year: 'Geçen yıl' }[kind];
@@ -83,7 +89,7 @@ export function renderAnalysis() {
   const maxLabel = Math.max(...labels.map(([, v]) => v.ms), 1);
   const f = facts(a);
 
-  body.innerHTML = `
+  body.innerHTML = `${life}
     <div class="kpis">
       <div class="kpi big"><small>Kayıtlı zaman (çakışmalar bir kez sayılır)</small><b>${fmtDur(s.uniqueMs)}</b>${delta(s.uniqueMs, a.prev.uniqueMs, prevLabel + '’e')}</div>
       <div class="kpi"><small>Ana etkinlik</small><b>${fmtDur(s.primaryMs)}</b></div>
@@ -124,10 +130,78 @@ export function renderAnalysis() {
 
     ${kind === 'day' ? `<section class="block"><div class="block-head"><h2>Günün akışı</h2></div><div class="flow" id="aFlow">${flowHtml(a.range, now)}</div></section>` : ''}`;
 
+  bindLife(body);
   if (kind === 'day') {
     renderDial($('#aDial'), sessions, events, a.range, now);
     bindFlow($('#aFlow'));
   }
+}
+
+// ── life balance ───────────────────────────────────────────────────────────
+const ago = (ts, now) => { if (!ts) return 'hiç yok'; const d = Math.floor((now - ts) / DAY); return d <= 0 ? 'bugün' : d === 1 ? 'dün' : `${d} gün önce`; };
+const when = (ts) => new Date(ts).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', weekday: 'short' });
+
+function ringsSvg(rows) {
+  const withTarget = rows.filter((r) => r.targetMs > 0).slice(0, 6);
+  let out = '';
+  withTarget.forEach((r, i) => {
+    const R = 88 - i * 15, C = 2 * Math.PI * R, f = Math.min(1, r.pct || 0);
+    out += `<circle cx="100" cy="100" r="${R}" fill="none" stroke="var(--track)" stroke-width="11"/>`
+      + `<circle cx="100" cy="100" r="${R}" fill="none" stroke="${catColor(r.cat)}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(f * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 100 100)"${f ? '' : ' opacity="0"'}/>`;
+  });
+  return `<svg class="rings" viewBox="0 0 200 200" role="img" aria-label="Denge halkası">${out}</svg>`;
+}
+
+function lifeCards(range, now) {
+  const st = store.state, targets = st.settings.targets || {};
+  const rows = balance(range, { sessions: st.sessions, routines: st.routines, routineLog: st.routineLog, targets }, now);
+  const withT = rows.filter((r) => r.targetMs > 0);
+  const overall = withT.length ? withT.reduce((n, r) => n + Math.min(r.actualMs, r.targetMs), 0) / withT.reduce((n, r) => n + r.targetMs, 0) : null;
+  const balanceCard = withT.length
+    ? `<section class="card balance"><div class="card-head"><h2>Denge</h2><button class="btn ghost sm" id="editTargets">Hedefler</button></div>
+      <div class="balance-body"><div class="rings-wrap">${ringsSvg(rows)}<div class="rings-center"><strong>%${Math.round(overall * 100)}</strong><small>hedefe</small></div></div>
+      <ul class="bal-list">${rows.map((r) => `<li><span class="dot" style="--c:${catColor(r.cat)}"></span><div><b>${esc(r.cat)}</b>
+        <small>${fmtDur(r.actualMs) || '0 dk'}${r.targetMs ? ` / ${fmtDur(r.targetMs)}` : ''}${r.tickedMs ? ` · ${fmtDur(r.tickedMs)} işaretlenen` : ''} · son: ${ago(r.lastAt, now)}</small></div>
+        <span class="pct${r.pct != null && r.pct < 0.5 ? ' low' : ''}">${r.pct == null ? '—' : `%${Math.round(r.pct * 100)}`}</span></li>`).join('')}</ul></div>
+      <p class="card-note">Ölçülen süre sayaçtan gelir. Sayaçsız işaretlenen alışkanlıklar planladığın süreyle sayılır ve ayrıca yazılır.</p></section>`
+    : `<section class="card balance"><div class="card-head"><h2>Denge</h2></div><p>Her alan için haftada ne kadar zaman ayırmak istediğini yaz; ne hedeflediğinle ne olduğunu burada yan yana görürsün.</p>
+      <button class="btn full" id="editTargets" style="margin-top:var(--s3)">Haftalık hedeflerimi koy</button></section>`;
+
+  const rv = review(range, st, now);
+  const reviewCard = rv.planned || rv.upcoming ? `<section class="card"><div class="card-head"><h2>Plan ve gerçek</h2><span class="chip quiet">${rv.done}/${rv.planned}</span></div>
+      ${rv.planned ? `<p>Saatini geçtiğin ${rv.planned} plandan <b>${rv.done}</b> tanesi yapıldı, <b>${rv.missed.length}</b> tanesi yapılmadı.</p>
+      <div class="stack"><i style="--c:var(--accent-2);width:${Math.round((rv.done / rv.planned) * 100)}%"></i><i style="--c:var(--secondary);width:${Math.round((rv.missed.length / rv.planned) * 100)}%;opacity:.45"></i></div>` : ''}
+      ${rv.missed.length ? `<h3 class="mini-h">Yapılamayanlar</h3><ul class="missed">${rv.missed.slice(0, 8).map((i) => `<li><span>${when(i.start)} ${fmtTime(i.start)}</span><b>${esc(i.title)}</b>${i.kind === 'routine' ? '<em>alışkanlık</em>' : ''}</li>`).join('')}</ul>${rv.missed.length > 8 ? `<p class="card-note">+${rv.missed.length - 8} tane daha</p>` : ''}` : ''}
+      ${rv.upcoming ? `<p class="card-note">Bu dönemde ${rv.upcoming} plan daha seni bekliyor.</p>` : ''}</section>` : '';
+
+  let neglectCard = '';
+  if (now >= range[0] && now < range[1]) {
+    const n = neglect(st.sessions, now).filter((x) => x.gapDays >= 1);
+    neglectCard = `<section class="card"><div class="card-head"><h2>Boşlarsan</h2><span class="chip quiet">senin kayıtlarından</span></div>
+      ${n.length ? `<ul class="missed">${n.slice(0, 5).map((x) => `<li><span>${Math.floor(x.gapDays)} gündür yok</span><b>${esc(x.name)}</b><em>şimdi ~${fmtDur(x.nowMs)}${x.extraMs >= 60000 ? ` (+${fmtDur(x.extraMs)})` : ''}</em></li>`).join('')}</ul>
+        <p class="card-note">Ara verdikçe uzayan işler. “~” tahmin: aynı işin ${n[0].samples}+ ölçümünde ara ile süre arasındaki ilişkiden hesaplandı${n.some((x) => x.beyondData) ? '; daha uzun aralar hiç ölçülmediği için gerçek süre bundan fazla olabilir' : ''}.</p>`
+      : '<p>Bir işi farklı aralıklarla en az 4 kez sayaçla ölçtüğünde (örneğin mail kontrolü), ara vermenin sana kaç dakikaya mal olduğunu burada gösteririm. Tahmin yalnızca kendi kayıtlarından çıkar.</p>'}</section>`;
+  }
+  return balanceCard + reviewCard + neglectCard;
+}
+
+function bindLife(root) {
+  const b = $('#editTargets', root);
+  if (b) b.onclick = openTargets;
+}
+
+function openTargets() {
+  const t = store.state.settings.targets || {};
+  openSheet('Haftalık hedefler', `<form id="f"><p class="hint" style="text-align:left;margin-top:0">Her alana haftada kaç saat ayırmak istiyorsun? Boş bıraktığın alan hedefsiz sayılır.</p>
+    <div class="targets">${CATEGORIES.map((c) => `<label class="field"><span><span class="dot" style="--c:${catColor(c)}"></span> ${esc(c)}</span><input type="number" inputmode="decimal" min="0" max="168" step="0.5" name="${esc(c)}" value="${t[c] ? +(t[c] / 60).toFixed(1) : ''}" placeholder="saat"></label>`).join('')}</div>
+    <div class="sheet-actions"><button class="btn full">Kaydet</button></div></form>`);
+  const f = $('#sheetBody #f');
+  f.onsubmit = (e) => {
+    e.preventDefault();
+    const next = {};
+    for (const c of CATEGORIES) { const v = parseFloat(String(f.elements[c].value).replace(',', '.')); if (v > 0) next[c] = Math.round(Math.min(168, v) * 60); }
+    run(() => store.setSetting('targets', next).then(() => renderAnalysis()), 'Hedefler kaydedildi');
+  };
 }
 
 export function bindAnalysis() {

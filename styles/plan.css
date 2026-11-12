@@ -168,3 +168,31 @@
   .plan-dial{height:min(84vw,340px)}
   .folder-img{height:34vw;max-height:150px}
 }
+
+/* ── Hayatım and life balance ── */
+.life{cursor:pointer;background-image:var(--irid)}
+.life p{margin:0}
+.chip.chosen{background:var(--cta);color:var(--on-accent);border-color:transparent}
+#lifeCats{margin-bottom:var(--s2)}
+.balance-body{display:grid;grid-template-columns:150px 1fr;gap:var(--s4);align-items:center}
+.rings-wrap{position:relative;width:150px;height:150px}
+.rings{width:100%;height:100%;display:block}
+.rings-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.rings-center strong{font-size:var(--fs-lg);font-weight:500;font-variant-numeric:tabular-nums}
+.rings-center small{font-size:var(--fs-xs);color:var(--ink-soft)}
+.bal-list{display:grid;gap:var(--s2);min-width:0}
+.bal-list li{display:grid;grid-template-columns:auto 1fr auto;gap:var(--s2);align-items:center}
+.bal-list b{display:block;font-size:var(--fs-sm);font-weight:500}
+.bal-list small{display:block;font-size:var(--fs-xs);color:var(--ink-soft);line-height:1.3}
+.bal-list .pct{font-size:var(--fs-sm);font-variant-numeric:tabular-nums;color:var(--ink-soft)}
+.bal-list .pct.low{color:#c0506a;font-weight:500}
+.mini-h{font-size:var(--fs-sm);font-weight:500;margin:var(--s3) 0 var(--s2)}
+.missed{display:grid;gap:6px}
+.missed li{display:grid;grid-template-columns:auto 1fr;gap:2px var(--s3);padding:var(--s2) var(--s3);border-radius:var(--r-sm);background:var(--surface-sunk);font-size:var(--fs-sm)}
+.missed li span{font-size:var(--fs-xs);color:var(--ink-soft);white-space:nowrap;align-self:center}
+.missed li b{font-weight:500;overflow-wrap:anywhere}
+.missed li em{grid-column:2;font-style:normal;font-size:var(--fs-xs);color:var(--accent-ink)}
+.targets{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--s3)}
+.targets .field>span{display:flex;align-items:center;gap:6px}
+@media (max-width:360px){.balance-body{grid-template-columns:1fr;justify-items:center}}
+@media (min-width:700px){.balance-body{grid-template-columns:200px 1fr}.rings-wrap{width:200px;height:200px}}
