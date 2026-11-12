@@ -334,3 +334,12 @@
 .ch-arrow{flex:none;width:18px;text-align:center;color:var(--ink-faint);font-size:13px}
 .chains .block-head{display:flex;align-items:center;gap:var(--s2)}
 .chains .grow{flex:1}
+.ch-moving{display:flex;align-items:center;gap:var(--s2);padding:10px 12px;margin-bottom:var(--s3);border-radius:var(--r-md);background:color-mix(in srgb,var(--accent) 16%,var(--surface-strong));font-size:var(--fs-sm);color:var(--accent-ink)}
+.ch-moving span{flex:1}
+.chains.moving .sq{animation:chwig .9s ease-in-out infinite alternate}
+@keyframes chwig{from{transform:rotate(-1deg)}to{transform:rotate(1deg)}}
+.chq{display:grid;gap:var(--s3)}
+.chq .chips{margin:0}
+.ch-branch-pick{display:grid;gap:6px;font-size:var(--fs-xs);color:var(--ink-soft)}
+.ch-exist summary{font-size:var(--fs-sm);color:var(--ink-soft);padding:6px 0}
+.ch-exist-h{font-size:var(--fs-xs);color:var(--ink-soft);margin:var(--s2) 0 4px;text-transform:uppercase;letter-spacing:.05em}
