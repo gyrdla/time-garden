@@ -88,6 +88,28 @@ export function afterFinish(session) {
   if (!session) return;
   const ms = sessionElapsed(session), t = session.taskId && store.getTask(session.taskId);
   if (!t) { toast(`Kaydedildi · ${fmtDur(ms)}`); return; }
+  afterTask(t, ms);
+}
+
+/** Where a task is being timed right now: the main session, a parallel record, or nowhere. */
+export function runningOf(taskId) {
+  const s = store.activeSession();
+  if (s?.taskId === taskId) return { kind: 'main' };
+  const e = [...store.openEvents(), ...store.pausedEvents()].find((x) => x.taskId === taskId);
+  return e ? { kind: 'event', event: e } : null;
+}
+
+/** Stop timing a task (wherever it runs) and offer to tick it. */
+export function stopTask(taskId, quiet = false) {
+  const r = runningOf(taskId);
+  if (!r) return Promise.resolve();
+  haptic(20);
+  if (r.kind === 'main') return act(store.finish().then((sess) => { if (!quiet) afterFinish(sess); }));
+  const e = r.event, ms = store.stretchesMs(e) + (e.endedAt == null ? Date.now() - e.startedAt : e.endedAt - e.startedAt);
+  return act((e.endedAt == null ? store.endSecondary(e.id) : store.dropPaused(e.id)).then(() => { const t = store.getTask(taskId); if (t && !quiet) afterTask(t, ms); }));
+}
+
+export function afterTask(t, ms) {
   const total = P.actualMs(t.id, store.state.sessions, store.state.events);
   const hist = P.historyEstimate(t.title, store.state.sessions, store.state.events);
   openSheet('Adım ölçüldü', `<p class="measure"><b>${esc(t.title)}</b><span>${fmtDur(ms)}</span></p>
@@ -683,7 +705,8 @@ export function openTask(id) {
     <input class="ts-title" name="title" required maxlength="160" value="${esc(t.title)}" autocomplete="off" aria-label="Görev adı">
     <div class="ts-meta">${est ? `<span class="ts-est" title="${esc(P.ESTIMATE_WHY[est.source])}">≈ ${fmtDur(est.minutes * MIN)}<small>${P.ESTIMATE_WHY[est.source]}${est.samples ? ` · ${est.samples} kayıt` : ''}</small></span>` : '<span class="ts-est none">Süre tahmini yok<small>ölçtükçe oluşur</small></span>'}
       ${spent ? `<span class="ts-spent">${fmtDur(spent)}<small>ölçüldü</small></span>` : ''}${whenNow ? `<span class="ts-spent">${esc(whenNow)}<small>plan</small></span>` : ''}</div>
-    <div class="ts-quick"><button type="button" class="qbtn main" id="tStart">${icon('play')}Başlat</button>
+    <div class="ts-quick">${runningOf(t.id) ? `<button type="button" class="qbtn main" id="tStop">${icon('stop')}Bitir</button>` : `<button type="button" class="qbtn main" id="tStart">${icon('play')}Başlat</button>`}
+      ${P.isDone(t, tasks) ? '' : '<button type="button" class="qbtn" id="tDone">✓ Bitti</button>'}
       <button type="button" class="qbtn${t.plannedDay === todayIso() ? ' on' : ''}" data-pick="${todayIso()}">☀ Bugün</button>
       <button type="button" class="qbtn" data-pick="${isoDate(Date.now() + 86_400_000)}">Yarın</button></div>
     ${subs.length || true ? `<div class="ts-sec"><span class="ts-h">Alt görevler${subs.length ? ` · ${subs.filter((x) => P.isDone(x, tasks)).length}/${subs.length}` : ''}</span>${subs.length ? `<ul class="sub-list">${subs.map((x) => `<li class="${P.isDone(x, tasks) ? 'done' : ''}">
@@ -728,7 +751,10 @@ export function openTask(id) {
   });
   const patch = () => ({ cardIds: [...direct], ...(f.cat ? { category: f.cat.value } : {}), title: f.title.value, how: f.how.value, estimateMin: f.est.value, plannedDay: f.day.value || null, scheduledAt: f.when.value ? fromLocalInput(f.when.value) : null, dependsOn: f.dep.value || null, parallel: f.par.checked });
   f.onsubmit = (e) => { e.preventDefault(); run(() => store.updateTask(t.id, patch()), 'Kaydedildi'); };
-  $('#tStart', body()).onclick = () => act(store.updateTask(t.id, patch()).then(() => { closeSheet(); startTask(t.id); }));
+  const ts = $('#tStart', body()), tp = $('#tStop', body()), td = $('#tDone', body());
+  if (ts) ts.onclick = () => act(store.updateTask(t.id, patch()).then(() => { closeSheet(); startTask(t.id); }));
+  if (tp) tp.onclick = () => act(store.updateTask(t.id, patch()).then(() => { closeSheet(); stopTask(t.id); }));
+  if (td) td.onclick = () => act(store.updateTask(t.id, patch()).then(() => { closeSheet(); return stopTask(t.id, true).then(() => toggleTask(t.id, $('#navAdd'))); }));
   $('#tBreak', body()).onclick = () => openBreakdown(store.getTask(t.id));
   const th = $('#tHabit', body());
   if (th) th.onclick = () => run(() => store.updateTask(t.id, patch()).then(() => store.taskToHabit(t.id)).then((r) => toast(r.status === 'active' ? `“${r.title}” alışkanlık oldu; şimdi onun üzerinde çalışıyorsun` : `“${r.title}” alışkanlık zincirinde sıraya girdi`)));

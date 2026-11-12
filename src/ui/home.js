@@ -7,7 +7,7 @@ import { dayRange, summarize, sessionElapsed, sessionActive, eventInterval, clip
 import { renderDial } from './dial.js';
 import { openStart, openSecondary, openPast, openEditSession, openEditEvent } from './sheets.js';
 import { openDay } from './nav.js';
-import { afterFinish } from './plan.js';
+import { afterFinish, afterTask } from './plan.js';
 import { todayLoad } from '../core/planner.js';
 import { renderStudio } from './studio.js';
 import { renderCombos } from './combos.js';
@@ -76,7 +76,14 @@ export function parallelHtml(now = Date.now()) {
 export function bindParallel(root) {
   $$('[data-ppause]', root).forEach((b) => { b.onclick = () => { haptic(); act(store.pauseSecondary(b.dataset.ppause)); }; });
   $$('[data-presume]', root).forEach((b) => { b.onclick = () => { haptic(); act(store.resumeSecondary(b.dataset.presume)); }; });
-  $$('[data-pend]', root).forEach((b) => { b.onclick = () => { haptic(12); act(b.dataset.held ? store.dropPaused(b.dataset.pend) : store.endSecondary(b.dataset.pend)); }; });
+  $$('[data-pend]', root).forEach((b) => {
+    b.onclick = () => {
+      haptic(12);
+      const e = store.getEvent(b.dataset.pend), ms = e ? store.stretchesMs(e) + (e.endedAt == null ? Date.now() - e.startedAt : e.endedAt - e.startedAt) : 0;
+      // A step that ran alongside gets the same "done?" question as a main one.
+      act((b.dataset.held ? store.dropPaused(b.dataset.pend) : store.endSecondary(b.dataset.pend)).then(() => { const t = e?.taskId && store.getTask(e.taskId); if (t) afterTask(t, ms); }));
+    };
+  });
 }
 
 const tag = (r) => (r.source === 'manual' ? '<span class="tag">elle</span>' : '');

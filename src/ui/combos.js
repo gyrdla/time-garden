@@ -7,7 +7,7 @@ import { routineTimes } from '../core/planner.js';
 import { isoDate, fromIso } from '../core/time.js';
 import { ValidationError } from '../core/tracker.js';
 import { openSheet, closeSheet, run } from './sheets.js';
-import { openTask, startTask } from './plan.js';
+import { openTask, startTask, stopTask, runningOf, toggleTask } from './plan.js';
 
 const today = () => isoDate(Date.now());
 const norm = (s) => String(s || '').trim().toLocaleLowerCase('tr-TR');
@@ -61,7 +61,8 @@ function comboHtml(c) {
     btn = `<button type="button" class="chip" data-crestart="${c.id}">Baştan başla</button>`;
   } else if (cur) {
     line = `Sırada: <b>${esc(stepName(cur))}</b>${cur.due ? ` · ${dayWord(cur.due)}` : (cur.queued ? ' · alışkanlık sırada bekliyor' : ' · gün seçilmedi')}`;
-    btn = cur.habit ? `<button type="button" class="chip" data-cdo="${c.id}">✓ Bugün yaptım</button>` : (cur.missing ? '' : `<button type="button" class="chip" data-cdo="${c.id}">▶ Başlat</button>`);
+    btn = cur.habit ? `<button type="button" class="chip" data-cdo="${c.id}">✓ Bugün yaptım</button>`
+      : (cur.missing ? '' : `<button type="button" class="chip" data-cdo="${c.id}">${runningOf(cur.step.ref) ? '■ Bitir' : '▶ Başlat'}</button><button type="button" class="chip" data-cdone="${c.id}">✓ Bitti</button>`);
   }
   return `<div class="combo ${pr.status}" data-combo="${c.id}">
     <div class="cb-head"><button type="button" class="cb-title" data-cedit="${c.id}">${esc(c.title)}${c.repeat ? ' <small>↻</small>' : ''}</button>
@@ -100,11 +101,18 @@ function bind(el) {
       else if (s?.kind === 'habit') toast('Alışkanlıklar Plan › Gün’de, zincirinde');
     };
   });
+  $$('[data-cdone]', el).forEach((b) => {
+    b.onclick = () => {
+      const c = store.getCombo(b.dataset.cdone), s = c.steps[store.comboProgress(c).next];
+      if (s?.kind !== 'task') return;
+      stopTask(s.ref, true).then(() => toggleTask(s.ref, b)).then(() => { const after = store.comboProgress(store.getCombo(c.id)); toast(after.status === 'done' ? `Combo tamam! ×${after.count}` : `Combo ×${after.count}`); });
+    };
+  });
   $$('[data-cdo]', el).forEach((b) => {
     b.onclick = () => {
       const c = store.getCombo(b.dataset.cdo), pr = store.comboProgress(c), s = c.steps[pr.next];
       if (!s) return;
-      if (s.kind === 'task') { startTask(s.ref); return; }
+      if (s.kind === 'task') { if (runningOf(s.ref)) stopTask(s.ref); else startTask(s.ref); return; }
       const r = store.getRoutine(s.ref);
       haptic(15);
       act(Promise.all(routineTimes(r).map((_, slot) => store.setRoutineDone(r.id, today(), true, slot))).then(() => {
