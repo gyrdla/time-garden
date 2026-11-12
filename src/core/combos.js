@@ -1,4 +1,5 @@
-// Combos: chains of steps across projects, life and habits, done in order.
+// Combos: routine chains that help build habits — chunk habits, life items and the project
+// steps they lead into (shower + hair → makeup → shoot → edit), done in order.
 //
 // Combo { id, title, repeat, steps:[{ kind:'task'|'habit', ref }], runStart:'YYYY-MM-DD',
 //         runs:[{ at, n }], createdAt, updatedAt }
@@ -89,23 +90,6 @@ export const comboBonus = (combos) => combos.reduce((n, c) => n + (c.runs || [])
 // ── suggestions ────────────────────────────────────────────────────────────
 
 /**
- * Chains the user already made with "starts after" links that cross projects and are not a
- * combo yet. Each is a list of task ids in order.
- */
-export function chainsFromLinks(tasks, combos = []) {
-  const used = new Set(combos.flatMap((c) => c.steps.filter((s) => s.kind === 'task').map((s) => s.ref)));
-  const byId = new Map(tasks.map((t) => [t.id, t]));
-  const hasNext = new Set(tasks.filter((t) => t.dependsOn && byId.has(t.dependsOn)).map((t) => t.dependsOn));
-  const out = [];
-  for (const end of tasks.filter((t) => !hasNext.has(t.id) && t.dependsOn)) {
-    const chain = [];
-    for (let cur = end, n = 0; cur && n < 30; cur = byId.get(cur.dependsOn), n++) chain.unshift(cur);
-    if (chain.length >= 2 && new Set(chain.map((t) => t.projectId)).size >= 2 && !chain.every((t) => used.has(t.id)) && !chain.every((t) => t.done)) out.push(chain.map((t) => t.id));
-  }
-  return out;
-}
-
-/**
  * Activities the user tracked one after another (within `gapH` hours) on at least `minDays`
  * different days. Returns chains of activity names with the number of days they were seen.
  */
@@ -136,5 +120,4 @@ export function sequencesFromRecords(sessions, { minDays = 2, gapH = 14 } = {}) 
 /** Ready-made combo shapes, offered as starting points and labelled as such. */
 export const COMBO_TEMPLATES = [
   { title: 'Hazırlık combosu', repeat: true, steps: ['Akşam duş + saç', 'Sabah makyaj', 'Çekim', 'Edit', 'Paylaş ve klasörle'] },
-  { title: 'Dikim combosu', repeat: false, steps: ['Kıyafeti dik', 'Kıyafet çekimi', 'Edit', 'Kombin çekimi', 'Kombin edit', 'Portfolyoya ekle'] },
 ];

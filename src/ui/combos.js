@@ -25,9 +25,33 @@ function dayWord(iso) {
 const stepName = (x) => x.missing ? 'silinmiş adım' : x.title;
 const stepTag = (x) => x.habit ? '↻' : '';
 
+/** Which part of her life or work a step belongs to. */
+function areaOf(step) {
+  if (step.kind === 'habit') { const r = store.getRoutine(step.ref); return r ? `Hayatım · ${r.category || 'Kişisel'}` : ''; }
+  const t = store.getTask(step.ref), p = t && store.getProject(t.projectId);
+  if (!p) return '';
+  return p.life ? `Hayatım · ${t.category || 'Kişisel'}` : (p.area ? `${p.name} · ${p.area}` : p.name);
+}
+
+/** Small square cards laid out like a snake: 3 a row, every other row runs back. */
+export function snakeHtml(cards, cols = 3) {
+  const pos = (i) => { const r = Math.floor(i / cols), c = i % cols; return { r, c: r % 2 ? cols - 1 - c : c }; };
+  let out = '';
+  cards.forEach((html, i) => {
+    const a = pos(i);
+    out += `<div class="sn-cell" style="grid-row:${a.r * 2 + 1};grid-column:${a.c * 2 + 1}">${html}</div>`;
+    if (i === cards.length - 1) return;
+    const b = pos(i + 1);
+    if (a.r === b.r) out += `<span class="sn-arrow" style="grid-row:${a.r * 2 + 1};grid-column:${Math.min(a.c, b.c) * 2 + 2}" aria-hidden="true">${b.c > a.c ? '→' : '←'}</span>`;
+    else out += `<span class="sn-arrow down" style="grid-row:${a.r * 2 + 2};grid-column:${a.c * 2 + 1}" aria-hidden="true">↓</span>`;
+  });
+  return `<div class="snake" style="grid-template-columns:repeat(${cols - 1},minmax(0,1fr) 16px) minmax(0,1fr)">${out}</div>`;
+}
+
 function comboHtml(c) {
   const pr = store.comboProgress(c), cur = pr.info[pr.next];
-  const chain = pr.info.map((x, i) => `${i ? '<span class="cb-arrow" aria-hidden="true">→</span>' : ''}<button type="button" class="cb-step${x.doneAt ? ' done' : ''}${i === pr.next ? ' now' : ''}${i === pr.next && pr.status === 'broken' ? ' broke' : ''}" data-cstep="${c.id}|${i}">${x.doneAt ? '✓ ' : ''}${stepTag(x)}${esc(stepName(x))}</button>`).join('');
+  const cards = pr.info.map((x, i) => `<button type="button" class="sq${x.doneAt ? ' done' : ''}${i === pr.next ? ' now' : ''}${i === pr.next && pr.status === 'broken' ? ' broke' : ''}" data-cstep="${c.id}|${i}">
+    <span class="sq-top">${x.doneAt ? '✓' : (x.habit ? '↻' : i + 1)}</span><b>${esc(stepName(x))}</b><small>${esc(areaOf(x.step))}</small></button>`);
   let line = '', btn = '';
   if (pr.status === 'done') {
     line = `Tamamlandı · ${pr.count} adım art arda`;
@@ -42,7 +66,7 @@ function comboHtml(c) {
   return `<div class="combo ${pr.status}" data-combo="${c.id}">
     <div class="cb-head"><button type="button" class="cb-title" data-cedit="${c.id}">${esc(c.title)}${c.repeat ? ' <small>↻</small>' : ''}</button>
       <span class="cb-x${pr.count ? ' hot' : ''}" aria-label="Combo ${pr.count}">×${pr.count}</span></div>
-    <div class="cb-chain">${chain}</div>
+    ${snakeHtml(cards)}
     <div class="cb-foot"><span>${line}</span>${btn}</div></div>`;
 }
 
@@ -54,7 +78,7 @@ export function renderCombos() {
   const shown = [...list].sort((a, b) => rank(a) - rank(b));
   el.innerHTML = `<div class="block-head"><h2>Combo</h2><span class="grow"></span>
     ${n ? `<button class="chip quiet" id="comboIdeas">✨ ${n} öneri</button>` : ''}<button class="btn ghost sm" id="comboNew">＋ Combo kur</button></div>
-    ${shown.length ? shown.map(comboHtml).join('') : '<p class="empty-note">Birbirini izleyen işleri (alışkanlık, Hayatım, projeler) sıraya diz; art arda yaptıkça sayaç artar, günü kaçarsa kırılır.</p>'}`;
+    ${shown.length ? shown.map(comboHtml).join('') : '<p class="empty-note">Alışkanlık kazanmak için birbirini çeken işleri sıraya diz (akşam duş + saç → sabah makyaj → çekim…). Art arda yaptıkça sayaç artar, günü kaçarsa kırılır.</p>'}`;
   bind(el);
 }
 
@@ -131,7 +155,7 @@ export function openBuilder(combo = null, preset = null) {
     <div class="field"><span>Var olan bir adım ekle</span><select id="cbPick">${pickerHtml()}</select></div>
     <div class="field"><span>ya da yeni adım yaz</span><div class="cb-new"><input id="cbNewTitle" maxlength="160" placeholder="Örn. Kombin çekimi" autocomplete="off" enterkeyhint="done">
       <select id="cbNewProj" aria-label="Hangi projeye">${projectOptions(lifeId)}</select><button type="button" class="btn sm" id="cbNewAdd">Ekle</button></div></div>
-    <p class="hint" style="text-align:left">Projelerdeki ardışık adımlar birbirine “şu bitince başlasın” ile de bağlanır. Bir adım planlandığı gün yapılmazsa combo kırılır.</p>
+    <p class="hint" style="text-align:left">Alışkanlıklar, Hayatım’daki işler ve bunların açtığı proje adımları (çekim, edit…) olabilir. Bir adım planlandığı gün yapılmazsa combo kırılır.</p>
     <p class="form-error" role="alert"></p>
     <button class="btn full">${combo ? 'Kaydet' : 'Combo kur'}</button>
     ${combo ? '<div class="more-acts"><button type="button" class="btn danger sm" id="cbDel">Combo’yu sil</button></div>' : ''}</form>`);
@@ -188,11 +212,7 @@ function stepsFromNames(names) {
 }
 
 function suggestions() {
-  const { tasks, sessions, combos } = store.state, out = [];
-  for (const ids of K.chainsFromLinks(tasks, combos)) {
-    const ts = ids.map((id) => store.getTask(id));
-    out.push({ why: 'bağladığın adımlar', title: ts.map((t) => t.title).slice(0, 2).join(' → '), steps: ids.map((ref) => ({ kind: 'task', ref })) });
-  }
+  const { sessions, combos } = store.state, out = [];
   const taken = new Set(combos.map((c) => norm(c.title)));
   for (const s of K.sequencesFromRecords(sessions).slice(0, 3)) {
     out.push({ why: `kayıtlarından · ${s.days} gün art arda yaptın`, title: s.names.join(' → '), steps: stepsFromNames(s.names), repeat: true });

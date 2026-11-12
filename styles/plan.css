@@ -288,13 +288,6 @@
 .cb-x{font-family:var(--font-display,inherit);font-size:26px;font-weight:700;line-height:1;color:var(--ink-faint);font-variant-numeric:tabular-nums}
 .cb-x.hot{color:var(--accent-ink);text-shadow:0 2px 10px color-mix(in srgb,var(--accent) 45%,transparent);animation:cbpop .5s var(--ease)}
 @keyframes cbpop{0%{transform:scale(.7)}60%{transform:scale(1.18)}100%{transform:scale(1)}}
-.cb-chain{display:flex;align-items:center;gap:4px;overflow-x:auto;padding:var(--s2) 0;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.cb-chain::-webkit-scrollbar{display:none}
-.cb-step{flex:none;min-height:32px;padding:0 10px;border-radius:var(--r-pill);background:var(--surface-sunk);color:var(--ink-soft);font-size:var(--fs-xs);white-space:nowrap;border:1px solid transparent}
-.cb-step.done{background:color-mix(in srgb,var(--accent) 22%,var(--surface-strong));color:var(--accent-ink)}
-.cb-step.now{background:var(--surface-strong);color:var(--ink);border-color:var(--accent);font-weight:600;box-shadow:var(--shadow-sm)}
-.cb-step.broke{border-color:#d9877f;color:#b55a52}
-.cb-arrow{flex:none;color:var(--ink-faint);font-size:13px}
 .cb-foot{display:flex;align-items:center;gap:var(--s2);font-size:var(--fs-xs);color:var(--ink-soft)}
 .cb-foot span{flex:1;min-width:0}
 .combo.broken .cb-x{color:#c9a3a0;text-decoration:line-through}
@@ -308,3 +301,36 @@
 .cb-new{display:flex;gap:6px;flex-wrap:wrap}
 .cb-new input{flex:1 1 140px}
 .cb-new select{flex:0 1 130px}
+
+/* small square cards shared by combos and project chains */
+.sq{position:relative;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;width:100%;aspect-ratio:1;padding:8px;border-radius:14px;background:var(--surface-strong);border:1px solid var(--line-soft);text-align:left;color:var(--ink);box-shadow:var(--shadow-sm);overflow:hidden}
+.sq b{font-size:12.5px;font-weight:600;line-height:1.2;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.sq small{font-size:10px;color:var(--ink-soft);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sq-top{position:absolute;top:7px;left:8px;font-size:11px;color:var(--ink-faint)}
+.sq.done{opacity:.55;background:var(--surface-sunk);box-shadow:none}
+.sq.done .sq-top{color:var(--accent-ink)}
+.sq.now,.sq.ready{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent),var(--shadow-sm)}
+.sq.now .sq-top,.sq.ready .sq-top{color:var(--accent-ink);font-weight:600}
+.sq.broke{border-color:#d9877f;box-shadow:0 0 0 2px #f3d3cf}
+.sq.waiting{opacity:.7;background:transparent;border-style:dashed;box-shadow:none}
+.snake{display:grid;align-items:center;row-gap:2px;padding:var(--s2) 0}
+.sn-arrow{text-align:center;color:var(--ink-faint);font-size:13px}
+.sn-arrow.down{line-height:1;padding:2px 0}
+/* project chains */
+.chain{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow-sm);padding:var(--s3);margin-bottom:var(--s3)}
+.ch-head{display:flex;align-items:baseline;gap:var(--s2)}
+.ch-head b{flex:1;font-size:var(--fs-md);font-weight:600}
+.ch-head span{font-size:var(--fs-xs);color:var(--ink-soft);font-variant-numeric:tabular-nums}
+.ch-bar{height:4px;border-radius:4px;background:var(--surface-sunk);margin:6px 0 var(--s2);overflow:hidden}
+.ch-bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.ch-tree{overflow-x:auto;padding:4px 2px 6px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.ch-tree::-webkit-scrollbar{display:none}
+.ch-node{display:flex;align-items:center}
+.ch-card{position:relative;flex:none;width:92px}
+.ch-add{position:absolute;right:-7px;bottom:-7px;width:22px;height:22px;border-radius:50%;background:var(--surface-strong);border:1px solid var(--line-soft);color:var(--accent-ink);font-size:14px;line-height:1;display:grid;place-items:center;box-shadow:var(--shadow-sm)}
+.ch-kids{display:flex;flex-direction:column;gap:8px;padding-left:2px}
+.ch-kids.fork{border-left:1.5px solid var(--line-soft);margin-left:8px}
+.ch-branch{display:flex;align-items:center}
+.ch-arrow{flex:none;width:18px;text-align:center;color:var(--ink-faint);font-size:13px}
+.chains .block-head{display:flex;align-items:center;gap:var(--s2)}
+.chains .grow{flex:1}

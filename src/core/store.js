@@ -574,28 +574,12 @@ export const getCombo = (id) => byId(state.combos, id);
 const comboCtx = () => ({ tasks: state.tasks, routines: state.routines, routineLog: state.routineLog });
 export const comboProgress = (c, now = Date.now()) => combosLib.comboProgress(c, comboCtx(), now);
 
-/**
- * Save a combo. Consecutive task steps are also linked with "starts after", so the chain shows
- * in the projects too (a link the user already set is kept).
- */
+/** Save a combo. Its order is its own; it does not link the project steps ("starts after"). */
 export function addCombo(input) {
   const c = combosLib.newCombo(input);
   state.combos.push(c);
-  const linked = chainTasks(c);
   emit('plan');
-  return write(db.batch([{ store: 'combos', put: c }, ...linked.map((t) => ({ store: 'tasks', put: t }))])).then(() => c);
-}
-
-function chainTasks(c) {
-  const out = [];
-  for (let i = 1; i < c.steps.length; i++) {
-    const a = c.steps[i - 1], b = c.steps[i];
-    if (a.kind !== 'task' || b.kind !== 'task') continue;
-    const t = getTask(b.ref);
-    if (!t || t.dependsOn) continue;
-    try { const n = planner.editTask(t, { dependsOn: a.ref }, state.tasks); putIn(state.tasks, n); out.push(n); } catch { /* would loop: leave it */ }
-  }
-  return out;
+  return write(db.put('combos', c)).then(() => c);
 }
 
 export function updateCombo(id, patch) {
@@ -605,9 +589,8 @@ export function updateCombo(id, patch) {
   if (steps.length < 2) return Promise.reject(new tracker.ValidationError('Bir combo en az iki adımdan oluşur.'));
   const c = { ...cur, ...('title' in patch ? { title: String(patch.title || '').trim().slice(0, 80) || 'Combo' } : {}), ...('repeat' in patch ? { repeat: !!patch.repeat } : {}), steps, updatedAt: Date.now() };
   putIn(state.combos, c);
-  const linked = chainTasks(c);
   emit('plan');
-  return write(db.batch([{ store: 'combos', put: c }, ...linked.map((t) => ({ store: 'tasks', put: t }))])).then(() => c);
+  return write(db.put('combos', c)).then(() => c);
 }
 
 export function removeCombo(id) {

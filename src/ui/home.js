@@ -11,6 +11,7 @@ import { afterFinish } from './plan.js';
 import { todayLoad } from '../core/planner.js';
 import { renderStudio } from './studio.js';
 import { renderCombos } from './combos.js';
+import { renderChains } from './chains.js';
 
 function act(promise) {
   Promise.resolve(promise).catch((e) => toast(e instanceof ValidationError ? e.message : 'Kaydedilemedi. Lütfen tekrar dene.'));
@@ -123,7 +124,7 @@ function renderFlow() {
 }
 
 export function renderHome() {
-  renderLive(); renderToday(); renderCombos(); renderStudio(); renderFlow();
+  renderLive(); renderToday(); renderCombos(); renderChains(); renderStudio(); renderFlow();
 }
 
 /** Called every second while Home is visible: only the cheap, changing bits. */

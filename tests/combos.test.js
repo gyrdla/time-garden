@@ -44,12 +44,7 @@ test('a step without a planned day never breaks the combo, it just waits', () =>
   assert.deepEqual([pr.status, pr.count, pr.next], ['running', 1, 1]);
 });
 
-test('suggestions: cross-project chains already linked, and sequences from the user\'s own records', () => {
-  const a = T(lab, 'Kıyafeti dik'), b = T(sm, 'Kıyafet çekimi', { dependsOn: a.id }), c = T(sm, 'Edit', { dependsOn: b.id });
-  const x = T(sm, 'X'), y = T(sm, 'Y', { dependsOn: x.id });                                     // same project only → not a combo suggestion
-  assert.deepEqual(K.chainsFromLinks([a, b, c, x, y]), [[a.id, b.id, c.id]]);
-  const combo = K.newCombo({ title: 'Dikim', steps: [a, b, c].map((t) => ({ kind: 'task', ref: t.id })) });
-  assert.deepEqual(K.chainsFromLinks([a, b, c, x, y], [combo]), []);
+test('suggestions: sequences from the user\'s own records', () => {
   const S = (name, d, h, m = 30) => ({ id: name + d + h, name, category: 'Kişisel', startedAt: at(d, h), endedAt: at(d, h, m), pauses: [] });
   const sessions = [S('Duş', 9, 21), S('Makyaj', 10, 9), S('Çekim', 10, 11), S('Duş', 11, 21), S('Makyaj', 12, 9), S('Çekim', 12, 11), S('Kitap', 13, 10)];
   assert.deepEqual(K.sequencesFromRecords(sessions), [{ names: ['Duş', 'Makyaj', 'Çekim'], days: 2 }]);
