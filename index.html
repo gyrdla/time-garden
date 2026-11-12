@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="styles/journal.css">
 <link rel="stylesheet" href="styles/plan.css">
 <link rel="stylesheet" href="styles/camera.css">
+<link rel="stylesheet" href="styles/studio.css">
 <title>Time Garden</title>
 <meta name="description" content="Zamanını keşfet, gününü yaratıcı bir günlükte sakla.">
 </head>
@@ -93,9 +94,11 @@
         <div class="stat-row" id="todayStats"></div>
       </section>
 
+      <section class="block studio" id="studio"></section>
+
       <section class="block">
-        <div class="block-head"><h2>Bugünün akışı</h2><button class="btn ghost sm" id="addPast">＋ Geçmiş kayıt</button></div>
-        <div class="flow" id="todayFlow"></div>
+        <div class="block-head"><button class="fold-head" id="flowToggle" aria-expanded="false"><h2>Bugünün akışı</h2><span class="chip quiet" id="flowCount"></span><span class="fold-ic">▸</span></button><button class="btn ghost sm" id="addPast">＋ Geçmiş kayıt</button></div>
+        <div class="flow" id="todayFlow" hidden></div>
       </section>
 
       <section class="block">

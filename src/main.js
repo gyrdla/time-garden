@@ -35,6 +35,7 @@ async function boot() {
 
   // Data changes re-render the visible screen. The journal manages its own DOM while editing.
   store.subscribe((what) => { if (view.screen !== 'journal' || what === 'init') refresh(); });
+  // The studio redraws only when its cards change (videos would otherwise reload).
   go('home');
 
   // The clock is derived from timestamps, so these only repaint; they never "count".

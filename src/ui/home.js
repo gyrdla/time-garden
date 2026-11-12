@@ -9,6 +9,7 @@ import { renderDial } from './dial.js';
 import { openStart, openSecondary, openPast, openEditSession, openEditEvent } from './sheets.js';
 import { openDay } from './nav.js';
 import { afterFinish } from './plan.js';
+import { renderStudio } from './studio.js';
 
 function act(promise) {
   Promise.resolve(promise).catch((e) => toast(e instanceof ValidationError ? e.message : 'Kaydedilemedi. Lütfen tekrar dene.'));
@@ -91,9 +92,18 @@ export function bindFlow(root) {
   $$('[data-event]', root).forEach((b) => { b.onclick = () => openEditEvent(b.dataset.event); });
 }
 
+let flowOpen = false;
+try { flowOpen = localStorage.getItem('tg-flow-open') === '1'; } catch { /* private mode */ }
+
 function renderFlow() {
-  const el = $('#todayFlow');
-  el.innerHTML = flowHtml(dayRange(Date.now())) || '<p class="empty-note">Gün boş bir sayfa. Bir etkinlik başlatınca burada belirir.</p>';
+  const el = $('#todayFlow'), range = dayRange(Date.now());
+  const n = store.state.sessions.filter((x) => x.startedAt < range[1] && (x.endedAt ?? Date.now()) > range[0]).length;
+  $('#flowCount').textContent = n ? `${n} kayıt` : 'boş';
+  $('#flowToggle').setAttribute('aria-expanded', String(flowOpen));
+  $('#flowToggle .fold-ic').textContent = flowOpen ? '▾' : '▸';
+  el.hidden = !flowOpen;
+  if (!flowOpen) return;
+  el.innerHTML = flowHtml(range) || '<p class="empty-note">Gün boş bir sayfa. Bir etkinlik başlatınca burada belirir.</p>';
   bindFlow(el);
 }
 
@@ -112,7 +122,7 @@ function renderWeek() {
 }
 
 export function renderHome() {
-  renderLive(); renderToday(); renderFlow(); renderWeek();
+  renderLive(); renderToday(); renderStudio(); renderFlow(); renderWeek();
 }
 
 /** Called every second while Home is visible: only the cheap, changing bits. */
@@ -130,4 +140,5 @@ export function tickSince(root) {
 
 export function bindHome() {
   $('#addPast').onclick = () => openPast('session');
+  $('#flowToggle').onclick = () => { flowOpen = !flowOpen; try { localStorage.setItem('tg-flow-open', flowOpen ? '1' : '0'); } catch { /* private mode */ } renderFlow(); };
 }

@@ -4,6 +4,7 @@
 
 import { summarize, sessionActive, total, isoDate, fromIso, dayRange, DAY, MIN } from './time.js';
 import { agenda } from './planner.js';
+import { periodRange, shiftPeriod } from './analytics.js';
 
 const norm = (s) => String(s || '').trim().toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ');
 
@@ -92,4 +93,18 @@ export function neglect(sessions, now = Date.now()) {
     out.push({ ...m, gapDays: gap, nowMs: m.at(gap), extraMs: Math.max(0, m.at(gap) - m.daily), beyondData: gap > m.maxGap });
   }
   return out.sort((a, b) => b.extraMs - a.extraMs);
+}
+
+/** Weeks (by their Monday, YYYY-MM-DD) in which every area with a target reached at least 100% of it. */
+export function balancedWeeks(ctx, now = Date.now(), share = 1) {
+  const targets = ctx.targets || {};
+  if (!Object.values(targets).some((v) => v > 0)) return [];
+  const first = Math.min(...ctx.sessions.map((s) => s.startedAt), ...ctx.routineLog.map((l) => fromIso(l.date)), now);
+  const out = [];
+  for (let a = periodRange('week', first)[0]; a <= now; a = shiftPeriod('week', a, 1)) {
+    const range = periodRange('week', a);
+    const rows = balance(range, ctx, now).filter((r) => r.targetMs > 0);
+    if (rows.length && rows.every((r) => r.actualMs >= r.targetMs * share)) out.push(isoDate(range[0]));
+  }
+  return out;
 }

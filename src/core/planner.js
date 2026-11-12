@@ -371,14 +371,14 @@ const DEER = [[0, 'Minik'], [3, 'Yavru'], [8, 'Genç'], [15, 'Zarif'], [25, 'Gö
  * The deer: every finished step or routine earns one piece of food; feeding it makes it grow.
  * `fed` is how many pieces have been given so far.
  */
-export function deer(tasks, routineLog, fed = 0) {
-  const earned = tasks.filter((t) => t.done && !tasks.some((k) => k.parentId === t.id)).length + routineLog.length;
+export function deer(tasks, routineLog, fed = 0, bonus = 0) {
+  const earned = tasks.filter((t) => t.done && !tasks.some((k) => k.parentId === t.id)).length + routineLog.length + Math.max(0, bonus | 0);
   const given = Math.max(0, Math.floor(fed) || 0);
   let i = 0;
   while (i + 1 < DEER.length && given >= DEER[i + 1][0]) i++;
   const next = DEER[i + 1] || null;
   return {
-    earned, fed: given, food: Math.max(0, earned - given), stage: DEER[i][1], stageIndex: i,
+    earned, bonus: Math.max(0, bonus | 0), fed: given, food: Math.max(0, earned - given), stage: DEER[i][1], stageIndex: i,
     next: next ? { name: next[1], need: next[0] - given, pct: (given - DEER[i][0]) / (next[0] - DEER[i][0]) } : null,
     size: 0.42 + 0.58 * Math.min(1, given / DEER[DEER.length - 1][0]),
   };

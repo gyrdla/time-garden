@@ -10,7 +10,9 @@ import { dayRange, isoDate, fromIso, fmtDur, fmtTime, fmtClock, fmtLive, clipAll
 import { periodRange, shiftPeriod } from '../core/analytics.js';
 import { openSheet, closeSheet, run } from './sheets.js';
 import { renderPlanDial } from './dial.js';
+import { balance } from '../core/balance.js';
 import { fileToImage, makeCover } from './camera.js';
+import { projectCardsHtml, bindProjectCards } from './studio.js';
 
 let tab = 'day';
 let dayAnchor = Date.now();
@@ -26,7 +28,7 @@ const allTemplates = () => [...store.userTemplates(), ...P.TEMPLATES];
 const todayIso = () => isoDate(Date.now());
 const plan = (ts) => P.dayPlan(ts, store.state.tasks, store.state.routines, store.state.routineLog, store.state.projects);
 
-const deerNow = () => P.deer(store.state.tasks, store.state.routineLog, store.state.settings.deer?.fed || 0);
+const deerNow = () => P.deer(store.state.tasks, store.state.routineLog, store.state.settings.deer?.fed || 0, store.deerBonus());
 
 // ── the light game layer ───────────────────────────────────────────────────
 function burst(el) {
@@ -111,6 +113,15 @@ export function tickPlan() {
   $$('#planScreen [data-since]').forEach((n) => { n.textContent = fmtLive(now - Number(n.dataset.since)); });
 }
 
+/** This week's balance in one line: how many areas reached their target, and the reward. */
+function balanceLine(now) {
+  const targets = store.state.settings.targets || {};
+  if (!Object.values(targets).some((v) => v > 0)) return '';
+  const rows = balance(periodRange('week', now), { sessions: store.state.sessions, routines: store.state.routines, routineLog: store.state.routineLog, targets }, now).filter((r) => r.targetMs > 0);
+  const okN = rows.filter((r) => r.actualMs >= r.targetMs).length;
+  return `<small class="deer-tip">${okN === rows.length ? `Bu hafta dengedesin · ＋${store.BALANCE_BONUS} yem kazandın` : `Denge: ${okN}/${rows.length} alan hedefte · hepsi olunca ＋${store.BALANCE_BONUS} yem`}</small>`;
+}
+
 /** The deer card: finished steps become food, feeding makes the deer grow. */
 function deerCard(now) {
   const { tasks, routineLog } = store.state;
@@ -120,6 +131,7 @@ function deerCard(now) {
     <div class="deer-info"><div class="card-head"><h2>${d.stage} geyik</h2><span class="chip${streak ? '' : ' quiet'}">${streak ? `${streak} gün seri` : 'Seri yok'}</span></div>
       <div class="stack"><i style="--c:var(--accent-2);width:${d.next ? Math.round(d.next.pct * 100) : 100}%"></i></div>
       <p>${d.next ? `${d.next.need} yem sonra ${d.next.name}` : 'En büyük hâline ulaştı'} · bugün ${today.done}/${today.total}</p>
+      ${balanceLine(now)}
       <button class="btn sm" id="feedDeer"${d.food ? '' : ' disabled'}>${d.food ? `Besle · ${d.food} yem` : 'Yem yok'}</button>
       ${d.food ? '' : '<small class="deer-tip">Her tamamlanan adım bir yem kazandırır.</small>'}</div></section>`;
 }
@@ -287,7 +299,7 @@ function dayView(now) {
     <section class="block"><div class="block-head"><h2>${isToday ? 'Bugün için seçilenler' : 'Bu gün için seçilenler'}</h2></div>
       ${tray.length ? `<div class="tray">${tray.map((t) => `<span class="drag-chip" data-drag="${t.id}" style="--c:${projColor(t.projectId)}"><span class="grip" aria-hidden="true">⠿</span><button data-task="${t.id}">${esc(t.title)}${t.estimateMin ? ` · ${t.estimateMin} dk` : ''}</button><button class="mini" data-start="${t.id}" aria-label="Başlat">${icon('play')}</button><button class="mini" data-unpick="${t.id}" aria-label="Günden çıkar">×</button></span>`).join('')}</div><p class="hint left">Saat vermek için saatin üstüne sürükle; saat vermeden de başlatabilirsin.</p>`
       : '<p class="empty-note">Saat bekleyen seçili görev yok.</p>'}</section>
-    ${items.length ? `<section class="block"><div class="block-head"><h2>Saatli olanlar</h2></div><div class="flow day-list">${items.map(row).join('')}</div></section>` : ''}
+    ${items.some((i) => !i.done) ? `<section class="block"><div class="block-head"><h2>Saatli olanlar</h2>${items.some((i) => i.done) ? `<span class="chip quiet">${items.filter((i) => i.done).length} bitti</span>` : ''}</div><div class="flow day-list">${items.filter((i) => !i.done).map(row).join('')}</div></section>` : ''}
     <section class="block"><div class="block-head"><h2>Projelerde sıradaki adımlar</h2></div>
       ${waitingTasks().length ? `<div class="flow">${waitingTasks().map((t) => `<div class="flow-item plan-row" data-drag="${t.id}"><span class="bar-c" style="--c:${projColor(t.projectId)}"></span>
         <button class="grow" data-task="${t.id}"><b>${esc(t.title)}</b><small>${esc(store.getProject(t.projectId)?.name || '')}${t.estimateMin ? ` · ${t.estimateMin} dk` : ''}</small></button>
@@ -455,6 +467,7 @@ function projectDetail(p, now) {
       <p>Tahmin ${fmtMin(planned)} · Ölçülen ${spent ? fmtDur(spent) : '—'}</p>${p.note ? `<p>${esc(p.note)}</p>` : ''}</section>
     <ul class="tree">${roots.map((t) => taskRow(t, 0)).join('') || `<li class="empty-note">${pr.total ? 'Bu projedeki tüm adımlar bitti ve hazine sandığında.' : 'Bu projede henüz görev yok. Aşağıya yaz ya da adımlara böl.'}</li>`}</ul>
     ${pr.done ? `<p class="hint left">Biten ${pr.done} adım hazine sandığında duruyor.</p>` : ''}
+    ${projectCardsHtml(p.id)}
     ${p.life ? `<div class="chips" id="lifeCats">${LIFE_CATS.map((c, i) => `<button type="button" class="chip${i === 0 ? ' chosen' : ''}" data-cat="${esc(c)}"><span class="dot" style="--c:${catColor(c)}"></span>${esc(c)}</button>`).join('')}</div>` : ''}
     <form class="quick-add" id="quickAdd"><input name="title" placeholder="${p.life ? 'Örn. Arkadaşımı ara, Çamaşır, Mail' : 'Yeni görev yaz, Enter\'a bas'}" maxlength="160" autocomplete="off" aria-label="Yeni görev"><button class="icon-btn sm" aria-label="Ekle">${icon('plus')}</button></form>
     ${p.life ? '' : `<button class="btn ghost full" id="projBreak">${icon('spark')}Projeyi adımlara böl</button>`}`;
@@ -506,6 +519,7 @@ function bindProjects(root) {
   };
   $$('[data-toggle]', root).forEach((b) => { b.onclick = () => toggleTask(b.dataset.toggle, b); });
   $$('[data-break]', root).forEach((b) => { b.onclick = () => openBreakdown(store.getTask(b.dataset.break)); });
+  bindProjectCards(root);
   $$('[data-fold]', root).forEach((b) => { b.onclick = () => { const id = b.dataset.fold; if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id); renderPlan(); }; });
   $$('.t-acts [data-today]', root).forEach((b) => {
     b.onclick = () => { const t = store.getTask(b.dataset.today); if (t?.plannedDay === todayIso() && t.scheduledAt == null) act(store.updateTask(t.id, { plannedDay: null })); else pickDay(b.dataset.today, todayIso()); };

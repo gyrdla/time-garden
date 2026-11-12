@@ -2,7 +2,7 @@
 // Bump DB_VERSION and add a step to `upgrade` when stores change.
 
 const DB_NAME = 'time-garden';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 function upgrade(db, oldVersion) {
   if (oldVersion < 1) {
@@ -26,9 +26,13 @@ function upgrade(db, oldVersion) {
     // User-made images: stickers, washi textures, project folder covers.
     db.createObjectStore('assets', { keyPath: 'id' });
   }
+  if (oldVersion < 4) {
+    // Studio: idea post-its, inspiration videos, tutorials.
+    db.createObjectStore('cards', { keyPath: 'id' });
+  }
 }
 
-export const DATA_STORES = ['sessions', 'events', 'pages', 'projects', 'tasks', 'routines', 'routineLog', 'assets'];
+export const DATA_STORES = ['sessions', 'events', 'pages', 'projects', 'tasks', 'routines', 'routineLog', 'assets', 'cards'];
 
 let dbPromise = null;
 

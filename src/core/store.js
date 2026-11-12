@@ -5,6 +5,8 @@ import * as db from './db.js';
 import * as tracker from './tracker.js';
 import { migrateV1, normalizeImport, SCHEMA } from './migrate.js';
 import * as planner from './planner.js';
+import * as cardsLib from './cards.js';
+import { balancedWeeks } from './balance.js';
 
 const LEGACY_KEY = 'tg-data';
 const log = (...a) => { if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') console.debug('[tg]', ...a); };
@@ -20,6 +22,7 @@ export const state = {
   routines: [],
   routineLog: [],
   assets: [],
+  cards: [],
   settings: { theme: 'pearl' },
 };
 
@@ -37,7 +40,7 @@ function write(promise) {
 
 export async function init() {
   try {
-    const [sessions, events, pages, projects, tasks, routines, routineLog, assets, kv] = await Promise.all([
+    const [sessions, events, pages, projects, tasks, routines, routineLog, assets, cards, kv] = await Promise.all([
       ...db.DATA_STORES.map((s) => db.getAll(s)), db.getAll('kv'),
     ]);
     const meta = Object.fromEntries(kv.map((r) => [r.key, r.value]));
@@ -53,7 +56,7 @@ export async function init() {
       load(m);
       log('migrated', m.sessions.length, 'sessions');
     } else {
-      load({ sessions, events, pages, projects, tasks, routines, routineLog, assets, settings: meta.settings || {} });
+      load({ sessions, events, pages, projects, tasks, routines, routineLog, assets, cards, settings: meta.settings || {} });
       if (meta.schema < SCHEMA) await db.put('kv', { key: 'schema', value: SCHEMA });
     }
   } catch (e) {
@@ -76,6 +79,7 @@ function load(d) {
   state.tasks = [...(d.tasks || [])];
   state.routines = [...(d.routines || [])];
   state.routineLog = [...(d.routineLog || [])];
+  state.cards = [...(d.cards || [])].sort((a, b) => b.createdAt - a.createdAt);
   state.assets = [...(d.assets || [])].sort((a, b) => a.createdAt - b.createdAt);
   state.settings = { theme: 'pearl', ...(d.settings || {}) };
 }
@@ -364,12 +368,18 @@ export function setRoutineDone(routineId, date, done, slot = 0) {
   return write(done ? db.put('routineLog', rec) : db.del('routineLog', id));
 }
 
+export const BALANCE_BONUS = 5;
+/** Food earned by balanced weeks (every area with a target reached it). */
+export function deerBonus(now = Date.now()) {
+  return balancedWeeks({ sessions: state.sessions, routines: state.routines, routineLog: state.routineLog, targets: state.settings.targets || {} }, now).length * BALANCE_BONUS;
+}
+
 /** Give the deer one piece of food, if there is any. Returns the state before and after. */
 export function feedDeer() {
-  const fed = state.settings.deer?.fed || 0;
-  const before = planner.deer(state.tasks, state.routineLog, fed);
+  const fed = state.settings.deer?.fed || 0, bonus = deerBonus();
+  const before = planner.deer(state.tasks, state.routineLog, fed, bonus);
   if (before.food < 1) throw new tracker.ValidationError('Yem yok. Bir adım tamamlayınca yem kazanırsın.');
-  return setSetting('deer', { ...(state.settings.deer || {}), fed: fed + 1 }).then(() => ({ before, after: planner.deer(state.tasks, state.routineLog, fed + 1) }));
+  return setSetting('deer', { ...(state.settings.deer || {}), fed: fed + 1 }).then(() => ({ before, after: planner.deer(state.tasks, state.routineLog, fed + 1, bonus) }));
 }
 
 export const userTemplates = () => state.settings.templates || [];
@@ -398,6 +408,40 @@ export function removeAsset(id) {
   return write(db.batch([{ store: 'assets', del: id }, ...cleared.map((p) => ({ store: 'projects', put: p }))]));
 }
 
+// ── studio cards ───────────────────────────────────────────────────────────
+export const getCard = (id) => state.cards.find((c) => c.id === id) || null;
+export const cardsOf = (kind) => state.cards.filter((c) => c.kind === kind);
+
+export function addCard(input) {
+  const c = cardsLib.newCard(input);
+  state.cards.unshift(c); emit('cards');
+  return write(db.put('cards', c)).then(() => c);
+}
+
+export function updateCard(id, patch) {
+  const cur = getCard(id);
+  if (!cur) return Promise.resolve();
+  const c = cardsLib.editCard(cur, patch);
+  state.cards[state.cards.findIndex((x) => x.id === id)] = c; emit('cards');
+  return write(db.put('cards', c)).then(() => c);
+}
+
+/** Removing an idea keeps the videos and tutorials that were attached to it. */
+export function removeCard(id) {
+  const freed = state.cards.filter((c) => c.ideaId === id).map((c) => ({ ...c, ideaId: null, updatedAt: Date.now() }));
+  state.cards = state.cards.filter((c) => c.id !== id).map((c) => freed.find((f) => f.id === c.id) || c);
+  emit('cards');
+  return write(db.batch([{ store: 'cards', del: id }, ...freed.map((c) => ({ store: 'cards', put: c }))]));
+}
+
+/** Turn an idea into a task of a project; the post-it stays, linked to that project. */
+export function ideaToTask(id, projectId) {
+  const c = getCard(id);
+  if (!c) return Promise.resolve(null);
+  return addTask({ projectId, title: (c.title || c.text).split('\n')[0].slice(0, 160), how: c.title ? c.text : '' })
+    .then((t) => updateCard(id, { projectId }).then(() => t));
+}
+
 // ── settings ───────────────────────────────────────────────────────────────
 export function setSetting(key, value) {
   state.settings = { ...state.settings, [key]: value };
@@ -410,7 +454,7 @@ export function exportData() {
   return {
     app: 'time-garden', schema: SCHEMA, exportedAt: new Date().toISOString(),
     sessions: state.sessions, events: state.events, pages: [...state.pages.values()],
-    projects: state.projects, tasks: state.tasks, routines: state.routines, routineLog: state.routineLog, assets: state.assets, settings: state.settings,
+    projects: state.projects, tasks: state.tasks, routines: state.routines, routineLog: state.routineLog, assets: state.assets, cards: state.cards, settings: state.settings,
   };
 }
 
