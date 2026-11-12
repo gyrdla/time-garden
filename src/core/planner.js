@@ -28,10 +28,10 @@ export function newProject({ name, area = '', category = 'Çalışma', note = ''
     category: CATEGORIES.includes(category) ? category : 'Diğer', note: String(note || ''), cover: typeof cover === 'string' && /^(preset|asset):[\w-]+$/.test(cover) ? cover : null, life: !!life, archived: false, createdAt: now, updatedAt: now };
 }
 
-export function newTask({ projectId, parentId = null, title, how = '', estimateMin = null, scheduledAt = null, dependsOn = null, parallel = false, order = 0, plannedDay = null, category = null }, now = Date.now()) {
+export function newTask({ projectId, parentId = null, title, how = '', estimateMin = null, scheduledAt = null, dependsOn = null, parallel = false, order = 0, plannedDay = null, category = null, cardIds = [] }, now = Date.now()) {
   if (!projectId) throw new ValidationError('Görev bir projeye bağlı olmalı.');
   return { id: uid(), projectId, parentId, title: need(title, 'Görev adı'), how: String(how || ''), estimateMin: minutes(estimateMin),
-    scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : null, plannedDay: Number.isFinite(scheduledAt) ? isoDate(scheduledAt) : (plannedDay || null), category: CATEGORIES.includes(category) ? category : null, dependsOn, parallel: !!parallel, done: false, doneAt: null, order, createdAt: now, updatedAt: now };
+    scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : null, plannedDay: Number.isFinite(scheduledAt) ? isoDate(scheduledAt) : (plannedDay || null), category: CATEGORIES.includes(category) ? category : null, cardIds: [...new Set((cardIds || []).filter((x) => typeof x === 'string' && x))], dependsOn, parallel: !!parallel, done: false, doneAt: null, order, createdAt: now, updatedAt: now };
 }
 
 export function editTask(task, patch, tasks, now = Date.now()) {
@@ -39,6 +39,7 @@ export function editTask(task, patch, tasks, now = Date.now()) {
   if ('title' in patch) next.title = need(patch.title, 'Görev adı');
   if ('how' in patch) next.how = String(patch.how || '');
   if ('category' in patch) next.category = CATEGORIES.includes(patch.category) ? patch.category : null;
+  if ('cardIds' in patch) next.cardIds = [...new Set((patch.cardIds || []).filter((x) => typeof x === 'string' && x))];
   if ('estimateMin' in patch) next.estimateMin = minutes(patch.estimateMin);
   if ('plannedDay' in patch) next.plannedDay = /^\d{4}-\d{2}-\d{2}$/.test(patch.plannedDay || '') ? patch.plannedDay : null;
   if ('scheduledAt' in patch) {

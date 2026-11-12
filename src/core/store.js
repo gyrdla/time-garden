@@ -345,16 +345,53 @@ export function removeTask(id) {
   return write(db.batch([...[...gone].map((g) => ({ store: 'tasks', del: g })), ...freed.map((t) => ({ store: 'tasks', put: t }))]));
 }
 
-/** Start tracking a task: as the primary activity, or alongside the running one if it is marked parallel. */
-export function startTask(id) {
+/**
+ * Start tracking a task. With nothing running it becomes the primary activity. While something
+ * runs, `mode` says what to do: 'main' (this becomes the primary, the running one carries on
+ * alongside), 'parallel' (this runs alongside) or 'replace' (finish the running one first).
+ */
+export async function startTask(id, mode = null) {
   const t = getTask(id);
-  if (!t) return Promise.resolve();
+  if (!t) return;
   const p = getProject(t.projectId);
-  if (activeSession()) {
-    if (!t.parallel) throw new tracker.ValidationError('Şu an başka bir etkinlik sürüyor. Önce onu bitir ya da bu görevi “aynı anda yapılabilir” olarak işaretle.');
-    return startSecondary({ label: t.title, taskId: id });
-  }
-  return start({ name: t.title, category: t.category || p?.category || 'Diğer', taskId: id });
+  const input = { name: t.title, category: t.category || p?.category || 'Diğer', taskId: id };
+  if (!activeSession()) return start(input);
+  if (mode === 'parallel') return startSecondary({ label: t.title, taskId: id });
+  if (mode === 'replace') { await finish(); return start(input); }
+  if (mode === 'main') return swapToMain(input);
+  throw new tracker.ValidationError('NEEDS_MODE');
+}
+
+/** The running primary steps aside: it continues as a parallel record and `input` becomes the primary. */
+export async function swapToMain(input, now = Date.now()) {
+  const cur = activeSession();
+  if (!cur) return start(input);
+  const carry = tracker.startEvent({ label: cur.name, attention: 'active' }, now);
+  if (cur.taskId) carry.taskId = cur.taskId;
+  const open = openEvents();
+  const fin = tracker.finishSession(cur, [], now);
+  const next = tracker.startSession(input, now);
+  if (input.taskId) next.taskId = input.taskId;
+  carry.sessionId = next.id;
+  const moved = open.map((e) => ({ ...e, sessionId: next.id, updatedAt: now }));
+  upsert(state.sessions, fin.session); upsert(state.sessions, next);
+  [carry, ...moved].forEach((e) => upsert(state.events, e));
+  emit('sessions');
+  return write(db.batch([{ store: 'sessions', put: fin.session }, { store: 'sessions', put: next }, ...[carry, ...moved].map((e) => ({ store: 'events', put: e }))]));
+}
+
+/** A parallel record that was really the main work becomes a primary activity with the same times. */
+export function eventToSession(id, category = 'Çalışma') {
+  const e = getEvent(id);
+  if (!e) return Promise.resolve(null);
+  const t = e.taskId && getTask(e.taskId), p = t && getProject(t.projectId);
+  const now = Date.now();
+  const s = { id: tracker.uid(), name: e.label, category: t?.category || p?.category || category, startedAt: e.startedAt, endedAt: e.endedAt ?? now,
+    pauses: [], note: e.note || '', source: e.source, createdAt: e.createdAt, updatedAt: now };
+  if (e.taskId) s.taskId = e.taskId;
+  state.events = state.events.filter((x) => x.id !== id);
+  upsert(state.sessions, s); emit('sessions');
+  return write(db.batch([{ store: 'events', del: id }, { store: 'sessions', put: s }])).then(() => s);
 }
 
 /** A new habit starts right away only if nothing is being built; otherwise it waits in the queue. */
@@ -502,12 +539,20 @@ export function setCardProject(id, projectId, on) {
   return putCards([{ ...c, projectIds: on ? [...c.projectIds, projectId] : c.projectIds.filter((x) => x !== projectId), updatedAt: Date.now() }]).then(() => true);
 }
 
-/** Turn an idea into a task of a project; the post-it stays, now also in that project. */
-export function ideaToTask(id, projectId) {
+/**
+ * Turn an idea into a task of a project. The task keeps the idea's tutorials and
+ * inspiration. keep=true leaves the post-it in the studio (linked to the task and project);
+ * keep=false removes it.
+ */
+export async function ideaToTask(id, projectId, { keep = true } = {}) {
   const c = getCard(id);
-  if (!c) return Promise.resolve(null);
-  return addTask({ projectId, title: (c.title || c.text).split('\n')[0].slice(0, 160), how: c.title ? c.text : '' })
-    .then((t) => setCardProject(id, projectId, true).then(() => t));
+  if (!c) return null;
+  const linked = cardsLib.linksOf(state.cards, id);
+  const t = await addTask({ projectId, title: (c.title || c.text).split('\n')[0].slice(0, 160), how: c.title ? c.text : (c.text.includes('\n') ? c.text : ''),
+    cardIds: keep ? [id, ...linked] : linked });
+  if (keep) await setCardProject(id, projectId, true);
+  else await removeCard(id);
+  return t;
 }
 
 // ── settings ───────────────────────────────────────────────────────────────

@@ -12,13 +12,13 @@ import { openSheet, closeSheet, run } from './sheets.js';
 import { renderPlanDial } from './dial.js';
 import { balance } from '../core/balance.js';
 import { fileToImage, makeCover } from './camera.js';
-import { projectCardsHtml, bindProjectCards } from './studio.js';
+import { embedHtml } from './studio.js';
+import { cardsOfTask } from '../core/cards.js';
 import { parallelHtml, bindParallel } from './home.js';
 
 let tab = 'day';
 let dayAnchor = Date.now();
 let openProject = null;
-const collapsed = new Set();
 
 const AREAS = ['Bilim', 'İçerik', 'Yazılım', 'İş arama', 'Kişisel'];
 const act = (p) => Promise.resolve(p).catch((e) => toast(e instanceof ValidationError ? e.message : 'Kaydedilemedi. Lütfen tekrar dene.'));
@@ -65,8 +65,21 @@ async function toggleTask(id, el) {
   } catch { toast('Kaydedilemedi. Lütfen tekrar dene.'); }
 }
 
+/** Start a step. If something else is already running, ask how the two relate. */
 function startTask(id) {
-  act(Promise.resolve().then(() => store.startTask(id)).then(() => { haptic(); toast('Zaman ölçümü başladı'); }));
+  const t = store.getTask(id), cur = store.activeSession();
+  const go = (mode) => act(store.startTask(id, mode).then(() => { haptic(); toast(mode === 'parallel' ? 'Aynı anda başladı' : 'Zaman ölçümü başladı'); }));
+  if (!t) return;
+  if (!cur) { go(null); return; }
+  if (t.parallel) { go('parallel'); return; }
+  openSheet(`“${cur.name}” sürüyor`, `<p class="hint" style="text-align:left;margin-top:0">“${esc(t.title)}” ile nasıl bir arada?</p><div class="menu">
+    <button id="sMain">${icon('play')}<div><b>Ana iş bu olsun</b><small>“${esc(cur.name)}” yanında sürmeye devam eder (aynı anda)</small></div></button>
+    <button id="sPar">${icon('plus')}<div><b>Aynı anda yapıyorum</b><small>“${esc(cur.name)}” ana iş kalır, bu yanında sayılır</small></div></button>
+    <button id="sRep">${icon('stop')}<div><b>“${esc(cur.name)}” bitsin, bunu başlat</b><small>Öncekini kapatır</small></div></button></div>`);
+  const b = $('#sheetBody');
+  $('#sMain', b).onclick = () => { closeSheet(); go('main'); };
+  $('#sPar', b).onclick = () => { closeSheet(); go('parallel'); };
+  $('#sRep', b).onclick = () => { closeSheet(); act(store.startTask(id, 'replace').then(() => { haptic(); toast(`“${cur.name}” kaydedildi, “${t.title}” başladı`); })); };
 }
 
 /** After a tracked session ends: say how long it really took and offer to tick the step. */
@@ -468,22 +481,36 @@ function lifeCard() {
     ${Object.keys(by).length ? `<div class="tray" style="margin-top:var(--s2)">${Object.entries(by).map(([c, n]) => `<span class="chip"><span class="dot" style="--c:${catColor(c)}"></span>${esc(c)} · ${n}</span>`).join('')}</div>` : ''}</section>`;
 }
 
-function taskRow(t, depth) {
+const KIND_IC = { idea: '💡', inspire: '✦', tuto: '🎓' };
+
+function cardCounts(t) {
+  const list = cardsOfTask(store.state.cards, t).filter((c) => c.kind !== 'idea');
+  const n = (k) => list.filter((c) => c.kind === k).length;
+  return [n('tuto') ? `🎓 ${n('tuto')}` : '', n('inspire') ? `✦ ${n('inspire')}` : ''].filter(Boolean).join(' · ');
+}
+
+function subMeta(x) {
+  const { tasks } = store.state, dep = x.dependsOn && store.getTask(x.dependsOn), kids = P.childrenOf(tasks, x.projectId, x.id);
+  return [kids.length ? `${kids.filter((k) => P.isDone(k, tasks)).length}/${kids.length} adım` : '', x.estimateMin ? `${x.estimateMin} dk` : '',
+    x.scheduledAt != null ? whenText(x.scheduledAt) : (x.plannedDay ? dayText(x.plannedDay) : ''), x.parallel ? 'aynı anda' : '',
+    !P.isDone(x, tasks) && P.isBlocked(x, tasks) && dep ? `bekliyor: ${esc(dep.title)}` : ''].filter(Boolean).join(' · ');
+}
+
+/** A task as a simple square card. Sub-steps live inside it (shown when it is opened). */
+function taskCard(t) {
   const { tasks, sessions, events } = store.state;
-  if (P.isDone(t, tasks)) return ''; // finished steps live in the treasure chest
-  const kids = P.childrenOf(tasks, t.projectId, t.id), done = P.isDone(t, tasks), blocked = !done && P.isBlocked(t, tasks);
-  const spent = P.actualMs(t.id, sessions, events), dep = t.dependsOn && store.getTask(t.dependsOn);
-  const when = t.scheduledAt != null ? whenText(t.scheduledAt) : (t.plannedDay ? `${t.plannedDay === todayIso() ? 'bugün' : dayText(t.plannedDay)} (saat yok)` : '');
-  const meta = [kids.length ? `${kids.filter((k) => P.isDone(k, tasks)).length}/${kids.length} adım` : '', t.estimateMin ? `${t.estimateMin} dk` : '', spent ? `ölçülen ${fmtDur(spent)}` : '',
-    t.category && store.getProject(t.projectId)?.life ? esc(t.category) : '', when, blocked && dep ? `bekliyor: ${esc(dep.title)}` : (dep ? `sonra: ${esc(dep.title)}` : ''), t.parallel ? 'aynı anda' : ''].filter(Boolean).join(' · ');
-  const isOpen = !collapsed.has(t.id), picked = t.plannedDay === todayIso();
-  return `<li class="t-row${done ? ' done' : ''}${blocked ? ' blocked' : ''}" style="--d:${Math.min(depth, 4)}">
-      <button class="t-check" data-toggle="${t.id}" role="checkbox" aria-checked="${done}" aria-label="${done ? 'Geri al' : 'Tamamla'}: ${esc(t.title)}">${done ? '✓' : ''}</button>
-      <button class="t-main" data-task="${t.id}"><b>${esc(t.title)}</b>${meta ? `<small>${meta}</small>` : ''}${t.how ? `<small class="how">${esc(t.how)}</small>` : ''}</button>
-      <span class="t-acts">${kids.length ? `<button data-fold="${t.id}" aria-label="${isOpen ? 'Kapat' : 'Aç'}">${isOpen ? '▾' : '▸'}</button>` : (done ? '' : `<button data-start="${t.id}" aria-label="Başlat">${icon('play')}</button>`)}
-      ${done || kids.length ? '' : `<button data-today="${t.id}" class="${picked ? 'on' : ''}" aria-label="Bugün için seç" aria-pressed="${picked}">☀</button>`}
-      ${done ? '' : `<button data-break="${t.id}" aria-label="Adımlara böl">${icon('spark')}</button>`}</span>
-    </li>${isOpen ? kids.map((k) => taskRow(k, depth + 1)).join('') : ''}`;
+  const kids = P.childrenOf(tasks, t.projectId, t.id), blocked = P.isBlocked(t, tasks), dep = t.dependsOn && store.getTask(t.dependsOn);
+  const spent = P.actualMs(t.id, sessions, events), picked = t.plannedDay === todayIso() && t.scheduledAt == null;
+  const when = t.scheduledAt != null ? whenText(t.scheduledAt) : (t.plannedDay ? (t.plannedDay === todayIso() ? 'bugün' : dayText(t.plannedDay)) : '');
+  const meta = [kids.length ? `${kids.filter((k) => P.isDone(k, tasks)).length}/${kids.length} adım` : '', t.estimateMin ? `${t.estimateMin} dk` : '', spent ? `${fmtDur(spent)} ölçüldü` : '', when,
+    t.category && store.getProject(t.projectId)?.life ? esc(t.category) : '', blocked && dep ? `bekliyor: ${esc(dep.title)}` : ''].filter(Boolean);
+  const links = cardCounts(t);
+  return `<div class="tcard${blocked ? ' blocked' : ''}">
+    <button class="t-check" data-toggle="${t.id}" role="checkbox" aria-checked="false" aria-label="Tamamla: ${esc(t.title)}"></button>
+    <button class="tc-main" data-task="${t.id}"><b>${esc(t.title)}</b>${meta.length ? `<small>${meta.join(' · ')}</small>` : ''}${links ? `<span class="tc-links">${links}</span>` : ''}</button>
+    <span class="tc-acts">${kids.length ? '' : `<button data-start="${t.id}" aria-label="Başlat">${icon('play')}</button>`}
+      ${kids.length ? '' : `<button data-today="${t.id}" class="${picked ? 'on' : ''}" aria-label="Bugün için seç" aria-pressed="${picked}">☀</button>`}
+      <button data-break="${t.id}" aria-label="Adımlara böl">${icon('spark')}</button></span></div>`;
 }
 
 function projectDetail(p, now) {
@@ -494,9 +521,9 @@ function projectDetail(p, now) {
     <section class="card game"><div class="card-head"><h2><span class="stage">${st.icon}</span>${st.name}</h2><span class="chip quiet">${pr.done}/${pr.total} adım</span></div>
       <div class="stack"><i style="--c:${catColor(p.category)};width:${Math.round(pr.pct * 100)}%"></i></div>
       <p>Tahmin ${fmtMin(planned)} · Ölçülen ${spent ? fmtDur(spent) : '—'}</p>${p.note ? `<p>${esc(p.note)}</p>` : ''}</section>
-    <ul class="tree">${roots.map((t) => taskRow(t, 0)).join('') || `<li class="empty-note">${pr.total ? 'Bu projedeki tüm adımlar bitti ve hazine sandığında.' : 'Bu projede henüz görev yok. Aşağıya yaz ya da adımlara böl.'}</li>`}</ul>
+    ${roots.some((t) => !P.isDone(t, tasks)) ? `<div class="tcards">${roots.filter((t) => !P.isDone(t, tasks)).map(taskCard).join('')}</div>`
+      : `<p class="empty-note">${pr.total ? 'Bu projedeki tüm adımlar bitti ve hazine sandığında.' : 'Bu projede henüz görev yok. Aşağıya yaz ya da adımlara böl.'}</p>`}
     ${pr.done ? `<p class="hint left">Biten ${pr.done} adım hazine sandığında duruyor.</p>` : ''}
-    ${projectCardsHtml(p.id)}
     ${p.life ? `<div class="chips" id="lifeCats">${LIFE_CATS.map((c, i) => `<button type="button" class="chip${i === 0 ? ' chosen' : ''}" data-cat="${esc(c)}"><span class="dot" style="--c:${catColor(c)}"></span>${esc(c)}</button>`).join('')}</div>` : ''}
     <form class="quick-add" id="quickAdd"><input name="title" placeholder="${p.life ? 'Örn. Arkadaşımı ara, Çamaşır, Mail' : 'Yeni görev yaz, Enter\'a bas'}" maxlength="160" autocomplete="off" aria-label="Yeni görev"><button class="icon-btn sm" aria-label="Ekle">${icon('plus')}</button></form>
     ${p.life ? '' : `<button class="btn ghost full" id="projBreak">${icon('spark')}Projeyi adımlara böl</button>`}`;
@@ -548,9 +575,7 @@ function bindProjects(root) {
   };
   $$('[data-toggle]', root).forEach((b) => { b.onclick = () => toggleTask(b.dataset.toggle, b); });
   $$('[data-break]', root).forEach((b) => { b.onclick = () => openBreakdown(store.getTask(b.dataset.break)); });
-  bindProjectCards(root);
-  $$('[data-fold]', root).forEach((b) => { b.onclick = () => { const id = b.dataset.fold; if (collapsed.has(id)) collapsed.delete(id); else collapsed.add(id); renderPlan(); }; });
-  $$('.t-acts [data-today]', root).forEach((b) => {
+  $$('.tc-acts [data-today]', root).forEach((b) => {
     b.onclick = () => { const t = store.getTask(b.dataset.today); if (t?.plannedDay === todayIso() && t.scheduledAt == null) act(store.updateTask(t.id, { plannedDay: null })); else pickDay(b.dataset.today, todayIso()); };
   });
 }
@@ -644,6 +669,10 @@ export function openTask(id) {
   const deps = tasks.filter((x) => x.projectId === t.projectId && !exclude.has(x.id));
   const kids = P.childrenOf(tasks, t.projectId, t.id).length;
   const slots = P.suggestSlots(t, { tasks, routines, routineLog, sessions, category: p?.category || 'Diğer' });
+  const subs = P.childrenOf(tasks, t.projectId, t.id);
+  const linkedCards = cardsOfTask(store.state.cards, t).filter((c) => c.kind !== 'idea');
+  const allCards = store.state.cards;
+  const direct = new Set(t.cardIds || []);
   openSheet('Görev', `<form id="f">
     <label class="field">Ne?<input name="title" required maxlength="160" value="${esc(t.title)}" autocomplete="off"></label>
     <label class="field">Nasıl? (yöntem, malzeme, not)<textarea name="how" rows="2" placeholder="Örn. doğal ışık, 9:16, üç plan">${esc(t.how)}</textarea></label>
@@ -657,6 +686,12 @@ export function openTask(id) {
     <label class="field">Zincir: şu bitince başlasın<select name="dep"><option value="">— bağımsız —</option>${deps.map((x) => `<option value="${x.id}"${x.id === t.dependsOn ? ' selected' : ''}>${esc(x.title)}</option>`).join('')}</select></label>
     <label class="check"><input type="checkbox" name="par"${t.parallel ? ' checked' : ''}>Başka bir işle aynı anda yapılabilir (çekim sırasında makyaj gibi)</label>
     ${spent ? `<p class="hint">Bu göreve şimdiye kadar ölçülen: ${fmtDur(spent)}</p>` : ''}
+    ${subs.length ? `<div class="field"><span>Alt görevler · ${subs.filter((x) => P.isDone(x, tasks)).length}/${subs.length}</span><ul class="sub-list">${subs.map((x) => `<li class="${P.isDone(x, tasks) ? 'done' : ''}">
+      <button type="button" class="t-check" data-subtoggle="${x.id}" role="checkbox" aria-checked="${P.isDone(x, tasks)}" aria-label="Tamamla: ${esc(x.title)}">${P.isDone(x, tasks) ? '✓' : ''}</button>
+      <button type="button" class="grow" data-subopen="${x.id}"><b>${esc(x.title)}</b>${subMeta(x) ? `<small>${subMeta(x)}</small>` : ''}</button>
+      ${P.isDone(x, tasks) ? '' : `<button type="button" class="mini-btn" data-substart="${x.id}" aria-label="Başlat">${icon('play')}</button>`}</li>`).join('')}</ul></div>` : ''}
+    <div class="field"><span>Bağlı tuto ve ilham</span>${linkedCards.length ? `<div class="task-cards">${linkedCards.map((c) => `<div class="tc-card"><div class="tc-card-h">${KIND_IC[c.kind]} <b>${esc(c.title || (c.kind === 'idea' ? (c.text || '').split('\n')[0] : c.url))}</b></div>${c.kind === 'idea' ? '' : embedHtml(c.url, { compact: true })}${c.text && c.kind !== 'idea' ? `<small>${esc(c.text)}</small>` : ''}</div>`).join('')}</div>` : ''}
+      ${allCards.length ? `<div class="chips" id="taskCardPick">${allCards.map((c) => `<button type="button" class="chip${direct.has(c.id) ? ' chosen' : ''}" data-tcard="${c.id}">${KIND_IC[c.kind]} ${esc((c.title || c.text || c.url || '').split('\n')[0].slice(0, 24))}</button>`).join('')}</div>` : '<span class="hint" style="text-align:left">Stüdyo’da kart oluşturunca buradan bağlayabilirsin.</span>'}</div>
     <p class="form-error" role="alert"></p>
     <div class="sheet-actions"><button class="btn full">Kaydet</button>
     <div class="field-row"><button type="button" class="btn ghost" id="tStart">${icon('play')}Başlat</button><button type="button" class="btn ghost" id="tBreak">${icon('spark')}Adımlara böl</button></div>
@@ -667,16 +702,20 @@ export function openTask(id) {
   const f = $('#f', body());
   $$('[data-est]', body()).forEach((b) => { b.onclick = () => { f.est.value = b.dataset.est; }; });
   $$('[data-slot]', body()).forEach((b) => { b.onclick = () => { f.when.value = b.dataset.slot ? toLocalInput(Number(b.dataset.slot)) : ''; }; });
+  $$('#taskCardPick [data-tcard]', body()).forEach((b) => { b.onclick = () => { const id = b.dataset.tcard; if (direct.has(id)) direct.delete(id); else direct.add(id); b.classList.toggle('chosen', direct.has(id)); }; });
+  $$('[data-subtoggle]', body()).forEach((b) => { b.onclick = () => act(store.updateTask(t.id, patch()).then(() => toggleTask(b.dataset.subtoggle, b)).then(() => openTask(t.id))); });
+  $$('[data-subopen]', body()).forEach((b) => { b.onclick = () => act(store.updateTask(t.id, patch()).then(() => openTask(b.dataset.subopen))); });
+  $$('[data-substart]', body()).forEach((b) => { b.onclick = () => act(store.updateTask(t.id, patch()).then(() => { closeSheet(); startTask(b.dataset.substart); })); });
   $$('[data-pick]', body()).forEach((b) => { b.onclick = () => { f.day.value = b.dataset.pick; if (!b.dataset.pick) f.when.value = ''; }; });
-  const patch = () => ({ ...(f.cat ? { category: f.cat.value } : {}), title: f.title.value, how: f.how.value, estimateMin: f.est.value, plannedDay: f.day.value || null, scheduledAt: f.when.value ? fromLocalInput(f.when.value) : null, dependsOn: f.dep.value || null, parallel: f.par.checked });
+  const patch = () => ({ cardIds: [...direct], ...(f.cat ? { category: f.cat.value } : {}), title: f.title.value, how: f.how.value, estimateMin: f.est.value, plannedDay: f.day.value || null, scheduledAt: f.when.value ? fromLocalInput(f.when.value) : null, dependsOn: f.dep.value || null, parallel: f.par.checked });
   f.onsubmit = (e) => { e.preventDefault(); run(() => store.updateTask(t.id, patch()), 'Kaydedildi'); };
-  $('#tStart', body()).onclick = () => run(() => store.updateTask(t.id, patch()).then(() => store.startTask(t.id)), 'Zaman ölçümü başladı');
+  $('#tStart', body()).onclick = () => act(store.updateTask(t.id, patch()).then(() => { closeSheet(); startTask(t.id); }));
   $('#tBreak', body()).onclick = () => openBreakdown(store.getTask(t.id));
   const th = $('#tHabit', body());
   if (th) th.onclick = () => run(() => store.updateTask(t.id, patch()).then(() => store.taskToHabit(t.id)).then((r) => toast(r.status === 'active' ? `“${r.title}” alışkanlık oldu; şimdi onun üzerinde çalışıyorsun` : `“${r.title}” alışkanlık zincirinde sıraya girdi`)));
   $('#tSub', body()).onclick = () => {
     const title = prompt('Alt adım:');
-    if (title && title.trim()) run(() => store.addTask({ projectId: t.projectId, parentId: t.id, title }), 'Alt adım eklendi');
+    if (title && title.trim()) act(store.updateTask(t.id, patch()).then(() => store.addTask({ projectId: t.projectId, parentId: t.id, title })).then(() => openTask(t.id)));
   };
   if (kids) $('#tTpl', body()).onclick = () => run(() => store.saveTemplate(t.id), 'Şablon kaydedildi; aynı adlı işlerde önerilir');
   $('#del', body()).onclick = () => {
@@ -708,7 +747,7 @@ export function openBreakdown(parent) {
     e.preventDefault();
     const steps = P.parseLines(f.steps.value);
     if (!steps.length) { $('.form-error', body()).textContent = 'En az bir adım yaz.'; return; }
-    run(() => store.addSteps({ projectId: parent.projectId, id: parent.id }, steps, { chain: f.chain.checked }).then(() => { if (parent.id) collapsed.delete(parent.id); }), `${steps.length} adım eklendi`);
+    run(() => store.addSteps({ projectId: parent.projectId, id: parent.id }, steps, { chain: f.chain.checked }).then(() => {}), `${steps.length} adım eklendi`);
   };
 }
 

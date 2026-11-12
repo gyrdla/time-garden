@@ -131,7 +131,8 @@ function bindCardDrag(root) {
         if (hot.dataset.dropNew) { openNewProject(card.id); return; }
         if (hot.dataset.dropProject) {
           const pid = hot.dataset.dropProject;
-          act(store.setCardProject(card.id, pid, true).then((did) => toast(did ? `${projName(pid)} projesine eklendi` : `Zaten ${projName(pid)} projesinde`)));
+          if (card.kind === 'idea') askKeep(card.id, [pid]);
+          else act(store.setCardProject(card.id, pid, true).then((did) => toast(did ? `${projName(pid)} projesine eklendi` : `Zaten ${projName(pid)} projesinde`)));
         } else {
           const other = store.getCard(hot.dataset.dropCard);
           act(store.linkCards(card.id, other.id).then((did) => toast(did ? `“${cardName(other).slice(0, 30)}” ile bağlandı` : 'Bu iki kart zaten bağlı')));
@@ -187,11 +188,24 @@ function openCardSheet(id, kind = 'idea') {
   const tt = $('#toTask', b);
   if (tt) tt.onclick = () => {
     if (!pids.size) { $('.form-error', b).textContent = 'Önce en az bir proje seç.'; return; }
-    run(async () => { await store.updateCard(c.id, { ...input(), links: c.links }); await saveLinks(c.id); for (const pid of pids) await store.ideaToTask(c.id, pid); },
-      `${[...pids].map(projName).join(', ')} projesine görev olarak eklendi`);
+    run(async () => { await store.updateCard(c.id, { ...input(), links: c.links }); await saveLinks(c.id); setTimeout(() => askKeep(c.id, [...pids]), 0); });
   };
   const del = $('#del', b);
   if (del) del.onclick = () => { if (confirm('Bu kart silinsin mi?')) run(() => store.removeCard(c.id), 'Silindi'); };
+}
+
+/** An idea going into projects becomes a task there; the user decides whether the post-it stays. */
+function askKeep(cardId, projectIds) {
+  const c = store.getCard(cardId);
+  if (!c) return;
+  const names = projectIds.map(projName).join(', ');
+  openSheet('Görev olarak ekle', `<p class="measure" style="display:block"><b>“${esc(ideaText(c))}”</b></p>
+    <p class="hint" style="text-align:left">${esc(names)} projesine görev olarak eklenecek; bağlı tuto ve ilhamlar görevin içinde olacak. Post-it Stüdyo'da kalsın mı?</p>
+    <div class="sheet-actions"><button class="btn full" id="kKeep">Stüdyo'da kalsın</button><button class="btn ghost full" id="kDrop">Stüdyo'dan kaldır</button></div>`);
+  const go = (keep) => run(async () => { for (const [i, pid] of projectIds.entries()) await store.ideaToTask(cardId, pid, { keep: keep || i < projectIds.length - 1 }); },
+    `${names} projesine görev olarak eklendi${keep ? '' : '; post-it kaldırıldı'}`);
+  $('#kKeep').onclick = () => go(true);
+  $('#kDrop').onclick = () => go(false);
 }
 
 /** Make a project in an existing or a new area, then put the card in it. */
@@ -212,6 +226,8 @@ function openNewProject(cardId, after = null) {
     e.preventDefault();
     run(async () => {
       const p = await store.addProject({ name: f.name.value, area: f.area.value.trim() || area });
+      const card = cardId && store.getCard(cardId);
+      if (card && card.kind === 'idea' && !after) { setTimeout(() => askKeep(cardId, [p.id]), 0); return; }
       if (cardId) await store.setCardProject(cardId, p.id, true);
       if (after) setTimeout(after, 0);
     }, cardId ? 'Proje oluşturuldu, kart içinde' : 'Proje oluşturuldu');

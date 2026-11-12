@@ -59,3 +59,17 @@ test('the deer gets 5 food for every week in which every area reached its target
   assert.equal(P.deer([], [], 0, weeks.length * 5).food, 5);
   assert.deepEqual(B.balancedWeeks({ sessions, routines: [], routineLog: [], targets: {} }, at(12, 12)), []);
 });
+
+test('a task reaches its own cards and, through an idea, the idea\'s tutorials', () => {
+  const idea = C.newCard({ kind: 'idea', text: 'Track 10 akım videosu' });
+  const tuto = { ...C.newCard({ kind: 'tuto', title: 'Stutter effect' }), links: [idea.id] };
+  const vid = C.newCard({ kind: 'inspire', url: 'https://youtu.be/dQw4w9WgXcQ' });
+  const proj = P.newProject({ name: 'GYRDLA' });
+  const t = P.newTask({ projectId: proj.id, title: 'x', cardIds: [idea.id, idea.id, 'gone'] });
+  assert.deepEqual(t.cardIds, [idea.id, 'gone']);
+  assert.deepEqual(C.cardsOfTask([idea, tuto, vid], t).map((c) => c.id), [idea.id, tuto.id]);
+  const t2 = P.editTask(t, { cardIds: [vid.id, tuto.id] }, [t]);
+  assert.deepEqual(C.cardsOfTask([idea, tuto, vid], t2).map((c) => c.kind), ['inspire', 'tuto']);
+  // the post-it removed: the task still has the tutorial because it was copied over
+  assert.deepEqual(C.cardsOfTask([tuto], { cardIds: [tuto.id] }).map((c) => c.title), ['Stutter effect']);
+});

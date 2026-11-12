@@ -96,3 +96,18 @@ export const linkedTo = (cards, { projectId, cardId }) => {
   const set = new Set(linksOf(cards, cardId));
   return cards.filter((c) => set.has(c.id));
 };
+
+/**
+ * Cards a task can reach: the ones linked to it directly, plus everything linked to an idea it
+ * came from. Missing (deleted) cards are skipped.
+ */
+export function cardsOfTask(cards, task) {
+  const byId = new Map(cards.map((c) => [c.id, c]));
+  const out = new Set();
+  for (const id of task.cardIds || []) {
+    if (!byId.has(id)) continue;
+    out.add(id);
+    if (byId.get(id).kind === 'idea') linksOf(cards, id).forEach((x) => out.add(x));
+  }
+  return [...out].map((id) => byId.get(id));
+}

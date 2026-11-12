@@ -163,10 +163,13 @@ export function openEditEvent(id) {
     ${running ? '<label class="field">Bitiş<input disabled value="Sürüyor"></label>' : `<label class="field">Bitiş<input type="datetime-local" name="end" required value="${toLocalInput(ev.endedAt)}"></label>`}</div>
     <label class="check"><input type="checkbox" name="bg"${ev.attention === 'background' ? ' checked' : ''}>Arka planda (dikkatimi bölmüyor)</label>
     <p class="form-error" role="alert"></p>
-    <div class="sheet-actions"><button class="btn full">Kaydet</button><button type="button" class="btn danger full" id="del">Kaydı sil</button></div>
+    <div class="sheet-actions"><button class="btn full">Kaydet</button>
+    <button type="button" class="btn ghost full" id="toMain">Bu aslında ana işti: ana etkinliğe çevir</button>
+    <button type="button" class="btn danger full" id="del">Kaydı sil</button></div>
   </form>`);
   const f = $('#f', body());
   const startWas = f.start.value, endWas = f.end?.value;
+  $('#toMain', body()).onclick = () => run(() => store.eventToSession(id), 'Ana etkinlik oldu; aynı saatler korundu');
   f.onsubmit = (e) => {
     e.preventDefault();
     const patch = { label: f.label.value, attention: f.bg.checked ? 'background' : 'active' };
