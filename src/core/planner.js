@@ -54,12 +54,59 @@ export function editTask(task, patch, tasks, now = Date.now()) {
   return next;
 }
 
-export function newRoutine({ title, projectId = null, category = 'Kişisel', days = [0, 1, 2, 3, 4, 5, 6], time = '09:00', estimateMin = 30, parallel = false }, now = Date.now()) {
+export const HABIT_DAYS = 21;
+
+/**
+ * A habit. status: 'active' (the one being built now), 'queued' (waiting its turn; not in
+ * the calendar yet) or 'acquired' (established; stays in the calendar and can be relaxed).
+ */
+export function newRoutine({ title, projectId = null, category = 'Kişisel', days = [0, 1, 2, 3, 4, 5, 6], time = '09:00', estimateMin = 30, parallel = false,
+  status = 'active', targetDays = HABIT_DAYS, startedAt = null, acquiredAt = null }, now = Date.now()) {
   const d = [...new Set((days || []).map(Number).filter((n) => n >= 0 && n <= 6))].sort();
   if (!d.length) throw new ValidationError('En az bir gün seç.');
   if (!/^\d{2}:\d{2}$/.test(time)) throw new ValidationError('Saat geçersiz.');
-  return { id: uid(), title: need(title, 'Rutin adı'), projectId, category: CATEGORIES.includes(category) ? category : 'Diğer',
-    days: d, time, estimateMin: minutes(estimateMin) || DEFAULT_MIN, parallel: !!parallel, active: true, createdAt: now };
+  const st = ['active', 'queued', 'acquired'].includes(status) ? status : 'acquired';
+  const target = Math.round(Number(targetDays));
+  return { id: uid(), title: need(title, 'Alışkanlık adı'), projectId, category: CATEGORIES.includes(category) ? category : 'Diğer',
+    days: d, time, estimateMin: minutes(estimateMin) || DEFAULT_MIN, parallel: !!parallel, active: true,
+    status: st, targetDays: Number.isFinite(target) && target > 0 ? Math.min(target, 365) : HABIT_DAYS,
+    startedAt: st === 'queued' ? null : (startedAt ?? now), acquiredAt: st === 'acquired' ? (acquiredAt ?? now) : null, createdAt: now };
+}
+
+const habitStatus = (r) => r.status || 'acquired'; // routines made before the chain existed count as established
+
+/**
+ * The habit chain: established habits, the single habit being built, and the queue behind it.
+ * Progress counts the days the active habit was done since it became active.
+ */
+export function habitChain(routines, routineLog) {
+  const acquired = routines.filter((r) => habitStatus(r) === 'acquired').sort((a, b) => (a.acquiredAt || a.createdAt) - (b.acquiredAt || b.createdAt));
+  const queued = routines.filter((r) => habitStatus(r) === 'queued').sort((a, b) => a.createdAt - b.createdAt);
+  const current = routines.find((r) => habitStatus(r) === 'active') || null;
+  let progress = null;
+  if (current) {
+    const from = isoDate(current.startedAt || current.createdAt);
+    const done = new Set(routineLog.filter((l) => l.routineId === current.id && l.date >= from).map((l) => l.date)).size;
+    const target = current.targetDays || HABIT_DAYS;
+    progress = { done, target, pct: Math.min(1, done / target), ready: done >= target };
+  }
+  return { acquired, current, queued, progress };
+}
+
+/** Records to write when the active habit is declared established: it, plus the next one promoted. */
+export function acquireHabit(routines, id, now = Date.now()) {
+  const cur = routines.find((r) => r.id === id);
+  if (!cur || habitStatus(cur) !== 'active') return [];
+  const out = [{ ...cur, status: 'acquired', acquiredAt: now }];
+  const next = routines.filter((r) => habitStatus(r) === 'queued').sort((a, b) => a.createdAt - b.createdAt)[0];
+  if (next) out.push({ ...next, status: 'active', startedAt: now });
+  return out;
+}
+
+/** Everything finished: done steps (newest first) and established habits. */
+export function treasure(tasks, routines) {
+  const steps = tasks.filter((t) => t.done && !tasks.some((k) => k.parentId === t.id)).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  return { steps, habits: routines.filter((r) => r.status === 'acquired' && r.acquiredAt && r.startedAt && r.acquiredAt > r.startedAt), count: steps.length };
 }
 
 function wouldCycle(id, dep, tasks) {
@@ -201,7 +248,7 @@ export function agenda(range, tasks, routines, routineLog, projects = []) {
   const d = new Date(range[0]), dow = (d.getDay() + 6) % 7, iso = isoDate(range[0]);
   const done = new Set(routineLog.filter((l) => l.date === iso).map((l) => l.routineId));
   for (const r of routines) {
-    if (!r.active || !r.days.includes(dow)) continue;
+    if (!r.active || r.status === 'queued' || !r.days.includes(dow)) continue;
     const [h, m] = r.time.split(':').map(Number);
     const s = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).getTime();
     items.push({ kind: 'routine', id: r.id, title: r.title, start: s, end: s + r.estimateMin * MIN, parallel: r.parallel, done: done.has(r.id), projectId: r.projectId, date: iso });

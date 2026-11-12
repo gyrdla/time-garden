@@ -297,26 +297,44 @@ export function startTask(id) {
   return start({ name: t.title, category: p?.category || 'Diğer', taskId: id });
 }
 
+/** A new habit starts right away only if nothing is being built; otherwise it waits in the queue. */
 export function addRoutine(input) {
-  const r = planner.newRoutine(input);
+  const busy = state.routines.some((r) => r.status === 'active');
+  const r = planner.newRoutine({ ...input, status: busy ? 'queued' : 'active' });
   state.routines.push(r); emit('plan');
-  return write(db.put('routines', r));
+  return write(db.put('routines', r)).then(() => r);
 }
 
 export function updateRoutine(id, patch) {
   const cur = getRoutine(id);
   if (!cur) return Promise.resolve();
-  const r = { ...planner.newRoutine({ ...cur, ...patch }), id, createdAt: cur.createdAt, active: 'active' in patch ? !!patch.active : cur.active };
+  const r = { ...planner.newRoutine({ ...cur, status: cur.status || 'acquired', ...patch }), id, createdAt: cur.createdAt,
+    startedAt: cur.startedAt ?? null, acquiredAt: cur.acquiredAt ?? null, active: 'active' in patch ? !!patch.active : cur.active };
   putIn(state.routines, r); emit('plan');
   return write(db.put('routines', r));
 }
 
+/** Declare the habit being built as established; the next one in the queue becomes active. */
+export function acquireHabit(id) {
+  const changed = planner.acquireHabit(state.routines, id);
+  changed.forEach((r) => putIn(state.routines, r));
+  emit('plan');
+  return write(db.batch(changed.map((r) => ({ store: 'routines', put: r })))).then(() => changed);
+}
+
 export function removeRoutine(id) {
+  const cur = getRoutine(id);
   const logs = state.routineLog.filter((l) => l.routineId === id);
   state.routines = state.routines.filter((r) => r.id !== id);
   state.routineLog = state.routineLog.filter((l) => l.routineId !== id);
+  const ops = [{ store: 'routines', del: id }, ...logs.map((l) => ({ store: 'routineLog', del: l.id }))];
+  if (cur?.status === 'active') {
+    // The chain never stands empty: the next habit in line takes its place.
+    const next = planner.habitChain(state.routines, state.routineLog).queued[0];
+    if (next) { const promoted = { ...next, status: 'active', startedAt: Date.now() }; putIn(state.routines, promoted); ops.push({ store: 'routines', put: promoted }); }
+  }
   emit('plan');
-  return write(db.batch([{ store: 'routines', del: id }, ...logs.map((l) => ({ store: 'routineLog', del: l.id }))]));
+  return write(db.batch(ops));
 }
 
 export function setRoutineDone(routineId, date, done) {

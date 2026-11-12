@@ -130,6 +130,18 @@ body[data-theme="white"] .wordmark,body[data-theme="minimal"] .wordmark{font:700
 .day-cell.has{background:color-mix(in srgb,var(--accent-2) calc(var(--lvl) * 60%),var(--surface-strong))}
 .day-cell.today{border:1.5px solid var(--accent-ink);font-weight:700}
 .day-cell .mark{position:absolute;bottom:5px;width:4px;height:4px;border-radius:50%;background:var(--accent-ink)}
+.cal-grid.leaves{gap:6px 5px}
+.day-cell.leaf{aspect-ratio:1/1.22;border-radius:7px;background:#fbfaf7;border:0;color:#1c1a19;box-shadow:0 1px 3px rgba(90,80,70,.2),0 0 0 1px rgba(90,80,70,.06);justify-content:flex-start;padding-top:3px;overflow:hidden}
+.day-cell.leaf small{font:italic 500 8px/1 var(--font-serif);color:#6b6763}
+.day-cell.leaf b{font:500 23px/1 var(--font-serif);margin-top:3px;font-variant-numeric:lining-nums}
+.day-cell.leaf em{position:absolute;bottom:2px;left:0;right:0;text-align:center;font-style:normal;font-size:8px;color:#8a8580;font-variant-numeric:tabular-nums}
+.day-cell.leaf.today{outline:1.5px solid #1c1a19;outline-offset:1.5px;font-weight:400}
+.day-cell.leaf .mark{bottom:12px;background:#9a2a35}
+.lf-m{position:absolute;font-size:10px;line-height:1;width:13px;height:13px;display:grid;place-items:center}
+.lf-m img{max-width:13px;max-height:13px;border-radius:2px}
+.lf-m.p0{left:2px;bottom:11px}.lf-m.p1{right:2px;bottom:11px}.lf-m.p2{right:2px;top:9px}
+.lf-tape{position:absolute;left:-5px;top:4px;width:22px;height:6px;transform:rotate(-38deg);background-size:auto 100%;opacity:.9}
+.cal-grid.leaves.week .day-cell.leaf{aspect-ratio:1/1.5}
 .weekday.under{padding:2px 0 0;font-size:10px;font-variant-numeric:tabular-nums}
 .week-list{display:grid;gap:var(--s2);margin-bottom:var(--s4)}
 .week-row{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:var(--s3);min-height:52px;padding:var(--s2) var(--s4);border-radius:var(--r-md);background:var(--surface);border:1px solid var(--line);text-align:left;width:100%}

@@ -170,3 +170,39 @@ test('the deer earns food from finished steps and grows when fed; table compares
   assert.equal(tb.estimateMin, 60);
   assert.equal(tb.actualMs / 60000, 25);
 });
+
+test('habit chain: one at a time, the next unlocks only when the current one is established', () => {
+  const water = P.newRoutine({ title: 'Su iç', status: 'active', targetDays: 3 }, at(8, 0, 1));
+  const walk = P.newRoutine({ title: 'Yürüyüş', status: 'queued' }, at(8, 1, 1));
+  const read = P.newRoutine({ title: 'Kitap', status: 'queued' }, at(8, 2, 1));
+  const old = { ...P.newRoutine({ title: 'Eski rutin' }, at(8, 0, 1)), status: undefined };   // made before the chain existed
+  let all = [walk, water, read, old];
+  const log = (r, day) => ({ id: `${r.id}|2026-11-${String(day).padStart(2, '0')}`, routineId: r.id, date: `2026-11-${String(day).padStart(2, '0')}` });
+  let c = P.habitChain(all, [log(water, 2), log(water, 3), log(walk, 3)]);
+  assert.equal(c.current.title, 'Su iç');
+  assert.deepEqual(c.queued.map((r) => r.title), ['Yürüyüş', 'Kitap']);
+  assert.deepEqual(c.acquired.map((r) => r.title), ['Eski rutin']);
+  assert.deepEqual([c.progress.done, c.progress.target, c.progress.ready], [2, 3, false]);
+  // only the active and established habits are on the calendar
+  assert.deepEqual(P.agenda(DAY11, [], all, []).map((i) => i.title).sort(), ['Eski rutin', 'Su iç']);
+  assert.deepEqual(P.acquireHabit(all, walk.id), []);                       // a queued habit cannot jump the line
+  c = P.habitChain(all, [log(water, 2), log(water, 3), log(water, 5)]);
+  assert.equal(c.progress.ready, true);
+  const changed = P.acquireHabit(all, water.id, at(9, 0, 6));
+  assert.deepEqual(changed.map((r) => [r.title, r.status]), [['Su iç', 'acquired'], ['Yürüyüş', 'active']]);
+  all = all.map((r) => changed.find((x) => x.id === r.id) || r);
+  c = P.habitChain(all, [log(walk, 3), log(walk, 7)]);
+  assert.equal(c.current.title, 'Yürüyüş');
+  assert.equal(c.progress.done, 1);                                          // days before it became active do not count
+  assert.deepEqual(c.acquired.map((r) => r.title), ['Eski rutin', 'Su iç']);
+  assert.deepEqual(P.agenda(DAY11, [], all, []).map((i) => i.title).sort(), ['Eski rutin', 'Su iç', 'Yürüyüş']);
+});
+
+test('treasure holds every finished step, newest first, and habits that were built', () => {
+  const a = mk({ title: 'A' }), a1 = { ...mk({ title: 'A1', parentId: a.id }), done: true, doneAt: at(9) }, b = { ...mk({ title: 'B' }), done: true, doneAt: at(10) }, c = mk({ title: 'C' });
+  const built = { ...P.newRoutine({ title: 'Su iç', status: 'active' }, at(8, 0, 1)), status: 'acquired', acquiredAt: at(9) };
+  const t = P.treasure([a, a1, b, c], [built, P.newRoutine({ title: 'Sıradaki', status: 'queued' })]);
+  assert.deepEqual(t.steps.map((x) => x.title), ['B', 'A1']);
+  assert.deepEqual(t.habits.map((x) => x.title), ['Su iç']);
+  assert.equal(t.count, 2);
+});

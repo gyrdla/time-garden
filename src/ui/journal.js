@@ -6,6 +6,7 @@ import { $, $$, esc, toast, haptic, fmtFullDate, fmtMonth } from './dom.js';
 import * as store from '../core/store.js';
 import { dayRange, summarize, fmtDur, fromIso, isoDate } from '../core/time.js';
 import { view } from './nav.js';
+import { flowHtml, bindFlow } from './home.js';
 import { openSheet, closeSheet } from './sheets.js';
 import { openCamera, fileToImage, imageFromClipboard, makeSticker, makeWashi } from './camera.js';
 
@@ -58,8 +59,13 @@ export function renderJournal() {
   $('#journalDate').textContent = fmtFullDate(ts);
   const sum = summarize(store.state.sessions, store.state.events, dayRange(ts), Date.now());
   $('#journalTime').textContent = sum.uniqueMs ? `${fmtDur(sum.uniqueMs)} kayıtlı zaman` : 'Bu gün için zaman kaydı yok';
+  $('#paperWeekday').textContent = new Date(ts).toLocaleDateString('tr-TR', { weekday: 'long' });
   $('#paperDate').textContent = new Date(ts).getDate();
   $('#paperMonth').textContent = fmtMonth(ts);
+  const flow = flowHtml(dayRange(ts));
+  $('#journalFlowBlock').hidden = !flow;
+  $('#journalFlow').innerHTML = flow;
+  bindFlow($('#journalFlow'));
   $('#journalNote').value = page.note || '';
   $('#canvasItems').innerHTML = sanitize(page.items);
   drawSvg.innerHTML = sanitize(page.draw);

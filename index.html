@@ -138,16 +138,17 @@
       <div class="washi-tray" id="washiTray"></div>
       <div class="object-toolbar" id="objectToolbar" hidden><span>Nesne seçildi</span><button id="objectSmaller">−</button><button id="objectBigger">＋</button><button id="objectRotate">↻</button><button id="objectFront">Öne al</button><button id="objectBack">Arkaya al</button><button id="objectEdit">Düzenle</button><button id="objectDelete">Sil</button></div>
       <div class="paper-stack">
-        <div class="rings" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
         <div class="paper" id="paper">
-          <div class="paper-date"><span id="paperDate"></span><small id="paperMonth"></small></div>
+          <span class="pin l" aria-hidden="true"></span><span class="pin r" aria-hidden="true"></span>
+          <div class="leaf-head"><i id="paperWeekday"></i><b id="paperDate"></b><small id="paperMonth"></small></div>
           <div class="paper-content" id="paperContent">
-            <textarea id="journalNote" placeholder="Bugün neler oldu? Buraya yaz…"></textarea>
+            <textarea id="journalNote" placeholder="Bugün neler oldu?"></textarea>
             <div id="canvasItems"></div>
           </div>
         </div>
       </div>
       <button class="tear-handle" id="tearHandle" aria-label="Yukarı çek ve yaprağı kopar"><svg class="ic"><use href="#i-up"/></svg><span>Yukarı çek ve yaprağı kopar</span></button>
+      <section class="block" id="journalFlowBlock" hidden><div class="block-head"><h2>Günün kayıtları</h2></div><div class="flow" id="journalFlow"></div></section>
     </section>
 
     <!-- ───────────── ANALYSIS ───────────── -->

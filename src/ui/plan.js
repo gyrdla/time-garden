@@ -54,6 +54,7 @@ async function toggleTask(id, el) {
     haptic(15);
     const pr = P.progress(store.state.tasks, t.projectId), st = P.stage(pr.pct), gained = deerNow().food - food0;
     const bits = [`${pr.done}/${pr.total} adım`];
+    bits.push('hazineye eklendi');
     if (gained > 0) bits.push(`＋${gained} yem`);
     if (st.name !== before) bits.push(`${st.icon} ${store.getProject(t.projectId)?.name || 'Proje'} artık ${st.name}`);
     if (unlocked.length) bits.push(`Sıradaki açıldı: ${unlocked[0].title}`);
@@ -114,7 +115,8 @@ export function tickPlan() {
 function deerCard(now) {
   const { tasks, routineLog } = store.state;
   const d = deerNow(), today = plan(now), streak = P.streak(tasks, routineLog, now);
-  return `<section class="card deer"><div class="deer-pen"><img id="deerImg" src="assets/deer.gif" alt="Geyiğim" style="--size:${d.size.toFixed(2)}" draggable="false"></div>
+  return `<section class="card deer"><div class="deer-pen"><img id="deerImg" src="assets/deer.gif" alt="Geyiğim" style="--size:${d.size.toFixed(2)}" draggable="false">
+      <button class="chest" id="openChest" aria-label="Hazine sandığı: ${P.treasure(tasks, store.state.routines).count} biten görev"><img src="assets/chest.webp" alt="" draggable="false"><span>${P.treasure(tasks, store.state.routines).count}</span></button></div>
     <div class="deer-info"><div class="card-head"><h2>${d.stage} geyik</h2><span class="chip${streak ? '' : ' quiet'}">${streak ? `${streak} gün seri` : 'Seri yok'}</span></div>
       <div class="stack"><i style="--c:var(--accent-2);width:${d.next ? Math.round(d.next.pct * 100) : 100}%"></i></div>
       <p>${d.next ? `${d.next.need} yem sonra ${d.next.name}` : 'En büyük hâline ulaştı'} · bugün ${today.done}/${today.total}</p>
@@ -122,7 +124,24 @@ function deerCard(now) {
       ${d.food ? '' : '<small class="deer-tip">Her tamamlanan adım bir yem kazandırır.</small>'}</div></section>`;
 }
 
+/** The treasure chest: every finished step lives here, grouped by project. */
+function openChest() {
+  const { tasks, routines, sessions, events } = store.state, t = P.treasure(tasks, routines);
+  const groups = new Map();
+  for (const st of t.steps) { if (!groups.has(st.projectId)) groups.set(st.projectId, []); groups.get(st.projectId).push(st); }
+  const day = (ts) => (ts ? new Date(ts).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) : '');
+  const total = t.steps.reduce((n, st) => n + P.actualMs(st.id, sessions, events), 0);
+  openSheet('Hazine sandığı', `<div class="chest-head"><img src="assets/chest.webp" alt=""><div><b>${t.count} biten görev</b><small>${total ? `${fmtDur(total)} ölçülmüş emek` : 'Tamamladığın her adım burada birikir'}${t.habits.length ? ` · ${t.habits.length} kazanılmış alışkanlık` : ''}</small></div></div>
+    ${t.habits.length ? `<h2 class="section-h area-h">Kazanılan alışkanlıklar</h2><div class="tray">${t.habits.map((h) => `<span class="chip">✓ ${esc(h.title)} · ${day(h.acquiredAt)}</span>`).join('')}</div>` : ''}
+    ${[...groups].map(([pid, list]) => `<h2 class="section-h area-h">${esc(store.getProject(pid)?.name || 'Proje')} · ${list.length}</h2><ul class="loot">${list.map((st) => { const ms = P.actualMs(st.id, sessions, events); const parent = st.parentId && store.getTask(st.parentId);
+      return `<li><span class="gem" style="--c:${projColor(pid)}"></span><div><b>${esc(st.title)}</b><small>${day(st.doneAt)}${parent ? ` · ${esc(parent.title)}` : ''}${ms ? ` · ${fmtDur(ms)}` : ''}</small></div><button class="btn ghost sm" data-undo="${st.id}">Geri al</button></li>`; }).join('')}</ul>`).join('')
+      || '<p class="empty-note">Sandık henüz boş. İlk adımı tamamlayınca buraya düşer.</p>'}`);
+  $$('[data-undo]', body()).forEach((b) => { b.onclick = () => act(store.setTaskDone(b.dataset.undo, false).then(() => { toast('Görev projesine geri döndü'); openChest(); })); });
+}
+
 function bindDeer(root) {
+  const chest = $('#openChest', root);
+  if (chest) chest.onclick = openChest;
   const b = $('#feedDeer', root);
   if (!b) return;
   b.onclick = () => {
@@ -298,9 +317,24 @@ function weekView(now) {
     ${weekRow(now, null)}
     <p class="hint">Yuvarlağın içindeki sayı o günün planı. Güne dokununca saat kadranı açılır.</p>
     ${waitingTray('Güne yerleştir', 'Görevi ⠿ tutamağından sürükleyip bir günün üstüne bırak.')}
-    <section class="block"><div class="block-head"><h2>Rutinler</h2><button class="btn ghost sm" id="addRoutine">＋ Rutin</button></div>
-      ${routines.length ? `<div class="tray">${routines.map((r) => `<button class="chip${r.active ? '' : ' quiet'}" data-routine="${r.id}">↻ ${esc(r.title)} · ${r.days.length === 7 ? 'her gün' : r.days.map((x) => WEEKDAYS[x]).join(' ')} ${r.time}</button>`).join('')}</div>`
-      : '<p class="empty-note">Her hafta tekrarlayan işlerini rutin olarak ekle; takvimde kendiliğinden görünür.</p>'}
+    ${habitSection()}`;
+}
+
+/** The habit chain: established → the one being built → the queue (locked). */
+function habitSection() {
+  const { routines, routineLog } = store.state, c = P.habitChain(routines, routineLog);
+  const when = (r) => `${r.days.length === 7 ? 'her gün' : r.days.map((x) => WEEKDAYS[x]).join(' ')} · ${r.time}`;
+  const node = (r, kind, extra = '') => `<button class="habit ${kind}${r.active ? '' : ' off'}" data-routine="${r.id}"><span class="h-dot"${kind === 'now' ? ` style="--p:${Math.round(c.progress.pct * 100)}"` : ''}>${kind === 'done' ? '✓' : kind === 'now' ? `${c.progress.done}` : '🔒'}</span><b>${esc(r.title)}</b><small>${extra || when(r)}</small></button>`;
+  const chain = [...c.acquired.map((r) => node(r, 'done', r.active ? '' : 'duraklatıldı')),
+    ...(c.current ? [node(c.current, 'now', `${c.progress.done}/${c.progress.target} gün`)] : []),
+    ...c.queued.map((r, i) => node(r, 'wait', i === 0 ? 'sırada' : `${i + 1}. sırada`))].join('<i class="h-link"></i>');
+  const ready = c.current && c.progress.ready ? `<div class="card habit-ready"><p><b>“${esc(c.current.title)}”</b> ${c.progress.done} gün yapıldı. Alışkanlık oldu mu?</p>
+      <div class="field-row"><button class="btn sm" id="habitWin">Evet, kazandım</button><button class="btn ghost sm" id="habitMore">7 gün daha</button></div></div>` : '';
+  return `<section class="block"><div class="block-head"><h2>Alışkanlık zinciri</h2><button class="btn ghost sm" id="addRoutine">＋ ${c.current ? 'Sıraya ekle' : 'Alışkanlık'}</button></div>
+    ${ready}
+    ${routines.length ? `<div class="habits">${chain}</div>
+      <p class="hint left">${c.current ? `Şu an yalnızca “${esc(c.current.title)}” üzerinde çalışıyorsun; ${c.progress.target} gün yapınca sıradaki açılır.` : (c.queued.length ? '' : 'Yeni bir alışkanlık ekleyebilirsin.')} Kazandıkların takvimde kalır; dokunup gününü, saatini esnetebilirsin.</p>`
+    : '<p class="empty-note">Tek seferde tek alışkanlık: birini ekle, kazanana kadar onunla kal; sonra sıradaki açılır.</p>'}
     </section>`;
 }
 
@@ -336,6 +370,10 @@ function bindPeriod(root, kind) {
   const add = $('#addRoutine', root);
   if (add) add.onclick = () => openRoutine();
   $$('[data-routine]', root).forEach((b) => { b.onclick = () => openRoutine(b.dataset.routine); });
+  const win = $('#habitWin', root), more = $('#habitMore', root);
+  const cur = P.habitChain(store.state.routines, store.state.routineLog).current;
+  if (win) win.onclick = () => { burst(win); haptic(20); act(store.acquireHabit(cur.id).then((ch) => toast(ch[1] ? `Kazandın! Sıradaki açıldı: ${ch[1].title}` : 'Kazandın! Yeni bir alışkanlık ekleyebilirsin'))); };
+  if (more) more.onclick = () => act(store.updateRoutine(cur.id, { targetDays: (cur.targetDays || P.HABIT_DAYS) + 7 }));
 }
 
 // ── projects ───────────────────────────────────────────────────────────────
@@ -376,6 +414,7 @@ function projectsView() {
 
 function taskRow(t, depth) {
   const { tasks, sessions, events } = store.state;
+  if (P.isDone(t, tasks)) return ''; // finished steps live in the treasure chest
   const kids = P.childrenOf(tasks, t.projectId, t.id), done = P.isDone(t, tasks), blocked = !done && P.isBlocked(t, tasks);
   const spent = P.actualMs(t.id, sessions, events), dep = t.dependsOn && store.getTask(t.dependsOn);
   const when = t.scheduledAt != null ? whenText(t.scheduledAt) : (t.plannedDay ? `${t.plannedDay === todayIso() ? 'bugün' : dayText(t.plannedDay)} (saat yok)` : '');
@@ -399,7 +438,8 @@ function projectDetail(p, now) {
     <section class="card game"><div class="card-head"><h2><span class="stage">${st.icon}</span>${st.name}</h2><span class="chip quiet">${pr.done}/${pr.total} adım</span></div>
       <div class="stack"><i style="--c:${catColor(p.category)};width:${Math.round(pr.pct * 100)}%"></i></div>
       <p>Tahmin ${fmtMin(planned)} · Ölçülen ${spent ? fmtDur(spent) : '—'}</p>${p.note ? `<p>${esc(p.note)}</p>` : ''}</section>
-    <ul class="tree">${roots.map((t) => taskRow(t, 0)).join('') || '<li class="empty-note">Bu projede henüz görev yok. Aşağıya yaz ya da adımlara böl.</li>'}</ul>
+    <ul class="tree">${roots.map((t) => taskRow(t, 0)).join('') || `<li class="empty-note">${pr.total ? 'Bu projedeki tüm adımlar bitti ve hazine sandığında.' : 'Bu projede henüz görev yok. Aşağıya yaz ya da adımlara böl.'}</li>`}</ul>
+    ${pr.done ? `<p class="hint left">Biten ${pr.done} adım hazine sandığında duruyor.</p>` : ''}
     <form class="quick-add" id="quickAdd"><input name="title" placeholder="Yeni görev yaz, Enter'a bas" maxlength="160" autocomplete="off" aria-label="Yeni görev"><button class="icon-btn sm" aria-label="Ekle">${icon('plus')}</button></form>
     <button class="btn ghost full" id="projBreak">${icon('spark')}Projeyi adımlara böl</button>`;
 }
@@ -619,24 +659,29 @@ export function openQuickTask() {
 }
 
 function openRoutine(id = null) {
-  const r = id ? store.getRoutine(id) : null;
-  openSheet(r ? 'Rutini düzenle' : 'Yeni rutin', `<form id="f">
+  const r = id ? store.getRoutine(id) : null, status = r ? (r.status || 'acquired') : null;
+  const willQueue = !r && store.state.routines.some((x) => x.status === 'active');
+  const label = { active: 'Şu an üzerinde çalıştığın alışkanlık', queued: 'Sırada bekliyor; öncekini kazanınca açılır', acquired: 'Kazanılmış alışkanlık; gününü ve saatini esnetebilirsin' };
+  openSheet(r ? 'Alışkanlık' : 'Yeni alışkanlık', `<form id="f">
+    ${r ? `<p class="hint" style="text-align:left;margin-top:0">${label[status]}</p>` : (willQueue ? '<p class="hint" style="text-align:left;margin-top:0">Şu an başka bir alışkanlık üzerinde çalışıyorsun; bu sıraya eklenecek.</p>' : '')}
     <label class="field">Ne?<input name="title" required maxlength="160" value="${esc(r?.title || '')}" autocomplete="off"></label>
     <div class="days" role="group" aria-label="Günler">${WEEKDAYS.map((d, i) => `<label><input type="checkbox" name="d${i}"${!r || r.days.includes(i) ? ' checked' : ''}><span>${d}</span></label>`).join('')}</div>
     <div class="field-row"><label class="field">Saat<input type="time" name="time" required value="${r?.time || '09:00'}"></label>
     <label class="field">Süre (dk)<input type="number" inputmode="numeric" name="est" min="1" max="1440" value="${r?.estimateMin || 30}"></label></div>
+    ${status === 'acquired' ? '' : `<label class="field">Kaç gün yapınca alışkanlık sayılsın?<input type="number" inputmode="numeric" name="target" min="1" max="365" value="${r?.targetDays || P.HABIT_DAYS}"></label>`}
     <label class="check"><input type="checkbox" name="par"${r?.parallel ? ' checked' : ''}>Başka bir işle aynı anda yapılabilir</label>
-    ${r ? `<label class="check"><input type="checkbox" name="active"${r.active ? ' checked' : ''}>Etkin</label>` : ''}
+    ${status === 'acquired' ? `<label class="check"><input type="checkbox" name="active"${r.active ? ' checked' : ''}>Takvimde göster (kapatınca duraklar)</label>` : ''}
     <p class="form-error" role="alert"></p>
-    <div class="sheet-actions"><button class="btn full">Kaydet</button>${r ? '<button type="button" class="btn danger full" id="del">Rutini sil</button>' : ''}</div></form>`);
+    <div class="sheet-actions"><button class="btn full">Kaydet</button>${r ? '<button type="button" class="btn danger full" id="del">Alışkanlığı sil</button>' : ''}</div></form>`);
   const f = $('#f', body());
   if (!r) f.title.focus();
   f.onsubmit = (e) => {
     e.preventDefault();
     const input = { title: f.title.value, days: WEEKDAYS.map((_, i) => i).filter((i) => f['d' + i].checked), time: f.time.value, estimateMin: f.est.value, parallel: f.par.checked };
-    run(() => (r ? store.updateRoutine(r.id, { ...input, active: f.active.checked }) : store.addRoutine(input)), 'Kaydedildi');
+    if (f.target) input.targetDays = f.target.value;
+    run(() => (r ? store.updateRoutine(r.id, { ...input, ...(f.active ? { active: f.active.checked } : {}) }) : store.addRoutine(input)), r ? 'Kaydedildi' : (willQueue ? 'Sıraya eklendi' : 'Alışkanlık başladı'));
   };
-  if (r) $('#del', body()).onclick = () => { if (confirm(`“${r.title}” rutini silinsin mi?`)) run(() => store.removeRoutine(r.id), 'Silindi'); };
+  if (r) $('#del', body()).onclick = () => { if (confirm(`“${r.title}” silinsin mi?`)) run(() => store.removeRoutine(r.id), 'Silindi'); };
 }
 
 function openRoutineDay(id, date) {
@@ -644,8 +689,8 @@ function openRoutineDay(id, date) {
   if (!r) return;
   const done = store.state.routineLog.some((l) => l.id === `${id}|${date}`);
   openSheet(r.title, `<div class="menu">
-    <button id="rDone">${icon('spark')}<div><b>${done ? 'Bugün için geri al' : 'Tamamlandı olarak işaretle'}</b><small>${r.time} · ${r.estimateMin} dk · rutin</small></div></button>
-    <button id="rEdit">${icon('cal')}<div><b>Rutini düzenle</b><small>Günler, saat, süre</small></div></button></div>`);
-  $('#rDone', body()).onclick = (e) => { haptic(15); if (!done) burst(e.currentTarget); run(() => store.setRoutineDone(id, date, !done), done ? 'Geri alındı' : 'Rutin tamamlandı'); };
+    <button id="rDone">${icon('spark')}<div><b>${done ? 'Bugün için geri al' : 'Tamamlandı olarak işaretle'}</b><small>${r.time} · ${r.estimateMin} dk · alışkanlık</small></div></button>
+    <button id="rEdit">${icon('cal')}<div><b>Alışkanlığı düzenle</b><small>Günler, saat, süre</small></div></button></div>`);
+  $('#rDone', body()).onclick = (e) => { haptic(15); if (!done) burst(e.currentTarget); run(() => store.setRoutineDone(id, date, !done), done ? 'Geri alındı' : 'Bugün yapıldı · ＋1 yem'); };
   $('#rEdit', body()).onclick = () => openRoutine(id);
 }

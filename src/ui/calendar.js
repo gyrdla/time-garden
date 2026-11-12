@@ -13,37 +13,62 @@ let anchor = Date.now();
 const daySum = (ts, now) => summarize(store.state.sessions, store.state.events, dayRange(ts), now);
 const level = (ms) => Math.min(1, ms / (8 * 3_600_000)).toFixed(2); // 8 tracked hours = full tint
 
+const thumbCache = new Map();
+
+/** Up to three small pictures and one tape taken from a day's journal page, for the mini leaf. */
+function pageThumbs(page) {
+  if (!page || !page.items) return { minis: [], tape: '' };
+  const key = `${page.date}|${page.updatedAt}`;
+  if (thumbCache.has(key)) return thumbCache.get(key);
+  const t = document.createElement('template');
+  t.innerHTML = page.items;
+  const minis = [];
+  for (const n of t.content.querySelectorAll('.sticker, img')) {
+    if (minis.length >= 3) break;
+    if (n.tagName === 'IMG') {
+      const src = n.dataset.asset ? store.getAsset(n.dataset.asset)?.dataUrl : n.getAttribute('src');
+      if (src && /^data:image\//.test(src)) minis.push(`<img src="${src}" alt="">`);
+    } else if (n.textContent.trim()) minis.push(esc(n.textContent.trim().slice(0, 2)));
+  }
+  let tape = '';
+  const tp = t.content.querySelector('.washi-tape, .washi-object');
+  if (tp) {
+    const cls = [...tp.classList].find((c) => c.startsWith('w-'));
+    const asset = tp.dataset.asset && store.getAsset(tp.dataset.asset);
+    tape = cls ? `<i class="lf-tape ${cls}"></i>` : `<i class="lf-tape" style="${asset ? `background-image:url(${asset.dataUrl})` : 'background:#efc5d8'}"></i>`;
+  }
+  const out = { minis, tape };
+  thumbCache.set(key, out);
+  return out;
+}
+
+const short = (ms) => (ms >= 3_600_000 ? `${Math.floor(ms / 3_600_000)}:${String(Math.round((ms % 3_600_000) / 60_000) % 60).padStart(2, '0')}` : fmtDur(ms));
+
+/** One day as a miniature calendar leaf showing what is on its journal page. */
+function leafCell(ts, now) {
+  const d = new Date(ts), iso = isoDate(ts), page = store.getPage(iso);
+  const ms = ts > now ? 0 : daySum(ts, now).uniqueMs, th = pageThumbs(page);
+  return `<button class="day-cell leaf${ms ? ' has' : ''}${iso === isoDate(now) ? ' today' : ''}${page ? ' page' : ''}" style="--lvl:${level(ms)}" data-day="${iso}" aria-label="${d.getDate()} ${fmtMonthName(ts)}${ms ? ', ' + fmtDur(ms) : ''}${page ? ', günlük sayfası var' : ''}">
+    <small>${WEEKDAYS[(d.getDay() + 6) % 7]}</small><b>${d.getDate()}</b>${th.tape}${th.minis.map((m, i) => `<span class="lf-m p${i}">${m}</span>`).join('')}
+    ${page && !th.minis.length && !th.tape ? '<span class="mark"></span>' : ''}<em>${ms ? short(ms) : ''}</em></button>`;
+}
+
 function monthView(now) {
   const d = new Date(anchor), y = d.getFullYear(), m = d.getMonth();
   const offset = (new Date(y, m, 1).getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
   let cells = WEEKDAYS.map((w) => `<div class="weekday">${w}</div>`).join('') + '<div></div>'.repeat(offset);
-  const today = isoDate(now);
-  for (let i = 1; i <= days; i++) {
-    const ts = new Date(y, m, i).getTime(), iso = isoDate(ts);
-    const ms = ts > now ? 0 : daySum(ts, now).uniqueMs;
-    cells += `<button class="day-cell${ms ? ' has' : ''}${iso === today ? ' today' : ''}" style="--lvl:${level(ms)}" data-day="${iso}" aria-label="${i} ${fmtMonthName(ts)}${ms ? ', ' + fmtDur(ms) : ''}">${i}${store.getPage(iso) ? '<span class="mark"></span>' : ''}</button>`;
-  }
+  for (let i = 1; i <= days; i++) cells += leafCell(new Date(y, m, i).getTime(), now);
   $('#periodTitle').textContent = fmtMonth(anchor);
-  $('#periodSub').textContent = 'Renk: kayıtlı süre · Nokta: günlük sayfası';
-  return `<div class="cal-grid">${cells}</div>`;
+  $('#periodSub').textContent = 'Her yaprak o günün günlük sayfası';
+  return `<div class="cal-grid leaves">${cells}</div>`;
 }
 
 function weekView(now) {
   const [ws, we] = periodRange('week', anchor);
-  const today = isoDate(now);
-  const cells = WEEKDAYS.map((w) => `<div class="weekday">${w}</div>`).join('') + WEEKDAYS.map((name, i) => {
-    const d = new Date(ws); d.setDate(d.getDate() + i);
-    const ts = d.getTime(), iso = isoDate(ts), ms = ts > now ? 0 : daySum(ts, now).uniqueMs;
-    return `<button class="day-cell${ms ? ' has' : ''}${iso === today ? ' today' : ''}" style="--lvl:${level(ms)}" data-day="${iso}" aria-label="${name} ${d.getDate()}${ms ? ', ' + fmtDur(ms) : ''}">${d.getDate()}${store.getPage(iso) ? '<span class="mark"></span>' : ''}</button>`;
-  }).join('') + WEEKDAYS.map((_, i) => {
-    const d = new Date(ws); d.setDate(d.getDate() + i);
-    const ms = d.getTime() > now ? 0 : daySum(d.getTime(), now).uniqueMs;
-    return `<div class="weekday under">${ms ? (ms >= 3_600_000 ? `${Math.floor(ms / 3_600_000)}:${String(Math.round((ms % 3_600_000) / 60_000) % 60).padStart(2, '0')}` : fmtDur(ms)) : '—'}</div>`;
-  }).join('');
-  const last = new Date(we - 1);
+  const cells = WEEKDAYS.map((_, i) => { const d = new Date(ws); d.setDate(d.getDate() + i); return leafCell(d.getTime(), now); }).join('');
   $('#periodTitle').textContent = weekTitle(ws, we);
-  $('#periodSub').textContent = String(last.getFullYear());
-  return `<div class="cal-grid">${cells}</div>`;
+  $('#periodSub').textContent = String(new Date(we - 1).getFullYear());
+  return `<div class="cal-grid leaves week">${cells}</div>`;
 }
 
 function yearView(now) {
