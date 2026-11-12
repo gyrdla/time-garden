@@ -46,7 +46,7 @@ function burst(el) {
   }
 }
 
-async function toggleTask(id, el) {
+export async function toggleTask(id, el) {
   const t = store.getTask(id);
   if (!t) return;
   const { tasks } = store.state;
@@ -67,7 +67,7 @@ async function toggleTask(id, el) {
 }
 
 /** Start a step. If something else is already running, ask how the two relate. */
-function startTask(id) {
+export function startTask(id) {
   const t = store.getTask(id), cur = store.activeSession();
   const go = (mode) => act(store.startTask(id, mode).then(() => { haptic(); toast(mode === 'parallel' ? 'Aynı anda başladı' : 'Zaman ölçümü başladı'); }));
   if (!t) return;
@@ -668,7 +668,9 @@ export function openTask(id) {
   const { tasks, sessions, events, routines, routineLog } = store.state;
   const p = store.getProject(t.projectId), hist = P.historyEstimate(t.title, sessions, events), spent = P.actualMs(t.id, sessions, events);
   const exclude = new Set([t.id, ...P.descendants(tasks, t.id).map((x) => x.id)]);
-  const deps = tasks.filter((x) => x.projectId === t.projectId && !exclude.has(x.id));
+  // "Starts after" can point at any open step, in any project or in Hayatım; this project first.
+  const depGroups = [p, ...store.state.projects.filter((x) => x.id !== t.projectId && !x.archived).sort((a, b) => (b.life ? 1 : 0) - (a.life ? 1 : 0))].filter(Boolean)
+    .map((g) => [g, tasks.filter((x) => x.projectId === g.id && !exclude.has(x.id) && (!x.done || x.id === t.dependsOn)).sort((a, b) => a.order - b.order)]).filter(([, l]) => l.length);
   const kids = P.childrenOf(tasks, t.projectId, t.id).length;
   const slots = P.suggestSlots(t, { tasks, routines, routineLog, sessions, category: p?.category || 'Diğer' });
   const subs = P.childrenOf(tasks, t.projectId, t.id);
@@ -699,7 +701,7 @@ export function openTask(id) {
       <div class="chips">${slots.map((sl) => `<button type="button" class="chip" data-slot="${sl.ts}">${whenText(sl.ts)} · ${esc(sl.why)}</button>`).join('')}${t.scheduledAt != null ? '<button type="button" class="chip" data-slot="">Saati kaldır</button>' : ''}</div>
       <label class="field">Gün (saat sonra)<input name="day" type="date" value="${t.plannedDay || ''}"></label>
       <div class="chips"><button type="button" class="chip" data-pick="">Günü kaldır</button></div>
-      <label class="field">Zincir: şu bitince başlasın<select name="dep"><option value="">— bağımsız —</option>${deps.map((x) => `<option value="${x.id}"${x.id === t.dependsOn ? ' selected' : ''}>${esc(x.title)}</option>`).join('')}</select></label>
+      <label class="field">Zincir: şu bitince başlasın<select name="dep"><option value="">— bağımsız —</option>${depGroups.map(([g, l]) => `<optgroup label="${esc(g.life ? 'Hayatım' : g.name)}${g.id === t.projectId ? ' (bu proje)' : ''}">${l.map((x) => `<option value="${x.id}"${x.id === t.dependsOn ? ' selected' : ''}>${x.parentId ? '· ' : ''}${esc(x.title)}</option>`).join('')}</optgroup>`).join('')}</select></label>
       <label class="check"><input type="checkbox" name="par"${t.parallel ? ' checked' : ''}>Başka bir işle aynı anda yapılabilir</label>
       ${allCards.length ? `<div class="field"><span>Kart bağla</span><div class="chips" id="taskCardPick">${allCards.map((c) => `<button type="button" class="chip${direct.has(c.id) ? ' chosen' : ''}" data-tcard="${c.id}">${KIND_IC[c.kind]} ${esc((c.title || c.text || c.url || '').split('\n')[0].slice(0, 24))}</button>`).join('')}</div></div>` : ''}
       <div class="more-acts"><button type="button" class="btn ghost sm" id="tBreak">${icon('spark')}Adımlara böl</button>

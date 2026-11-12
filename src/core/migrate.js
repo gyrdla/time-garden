@@ -5,11 +5,12 @@
 // v3  + planner                       { projects, tasks, routines, routineLog }
 // v4  + user images                   { assets }
 // v5  + studio cards                  { cards }
+// v6  + combos                        { combos }
 
 import { fromIso } from './time.js';
 import { CATEGORIES, uid } from './tracker.js';
 
-export const SCHEMA = 5;
+export const SCHEMA = 6;
 
 function hm(iso, clock) {
   const [h, m] = String(clock || '00:00').split(':').map(Number);
@@ -26,7 +27,7 @@ function legacyContexts(contexts, sessionId, fallbackEnd) {
 
 /** Convert a v1 blob into v2 records. Never mutates its input. */
 export function migrateV1(old) {
-  const out = { schema: SCHEMA, sessions: [], events: [], pages: [], projects: [], tasks: [], routines: [], routineLog: [], assets: [], cards: [], settings: { theme: 'pearl' } };
+  const out = { schema: SCHEMA, sessions: [], events: [], pages: [], projects: [], tasks: [], routines: [], routineLog: [], assets: [], cards: [], combos: [], settings: { theme: 'pearl' } };
   if (!old || typeof old !== 'object') return out;
   const cat = (c) => (CATEGORIES.includes(c) ? c : 'Diğer');
   const live = new Map((old.sessions || []).filter((s) => s && s.id).map((s) => [s.id, s]));
@@ -104,6 +105,8 @@ export function normalizeImport(raw) {
     routines: (raw.routines || []).filter((r) => r && typeof r.id === 'string' && typeof r.title === 'string' && Array.isArray(r.days)),
     assets: (raw.assets || []).filter((a) => a && typeof a.id === 'string' && ['sticker', 'washi', 'cover'].includes(a.kind) && /^data:image\//.test(a.dataUrl || '')),
     cards: (raw.cards || []).filter((c) => c && typeof c.id === 'string' && ['idea', 'inspire', 'tuto'].includes(c.kind) && (!c.url || /^https?:\/\//.test(c.url))),
+    combos: (raw.combos || []).filter((c) => c && typeof c.id === 'string' && Array.isArray(c.steps) && c.steps.length >= 2 && c.steps.every((x) => x && ['task', 'habit'].includes(x.kind) && typeof x.ref === 'string'))
+      .map((c) => ({ ...c, title: String(c.title || 'Combo'), repeat: !!c.repeat, runStart: /^\d{4}-\d{2}-\d{2}$/.test(c.runStart || '') ? c.runStart : new Date().toISOString().slice(0, 10), runs: Array.isArray(c.runs) ? c.runs.filter((r) => r && Number.isFinite(r.n)) : [] })),
     routineLog: (raw.routineLog || []).filter((l) => l && typeof l.id === 'string' && typeof l.routineId === 'string'),
     settings: raw.settings && typeof raw.settings === 'object' ? raw.settings : {},
   };

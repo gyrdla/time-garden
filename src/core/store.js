@@ -6,7 +6,9 @@ import * as tracker from './tracker.js';
 import { migrateV1, normalizeImport, SCHEMA } from './migrate.js';
 import * as planner from './planner.js';
 import * as cardsLib from './cards.js';
+import * as combosLib from './combos.js';
 import { balancedWeeks } from './balance.js';
+import { isoDate } from './time.js';
 
 const LEGACY_KEY = 'tg-data';
 const log = (...a) => { if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') console.debug('[tg]', ...a); };
@@ -23,6 +25,7 @@ export const state = {
   routineLog: [],
   assets: [],
   cards: [],
+  combos: [],
   settings: { theme: 'pearl' },
 };
 
@@ -40,7 +43,7 @@ function write(promise) {
 
 export async function init() {
   try {
-    const [sessions, events, pages, projects, tasks, routines, routineLog, assets, cards, kv] = await Promise.all([
+    const [sessions, events, pages, projects, tasks, routines, routineLog, assets, cards, combos, kv] = await Promise.all([
       ...db.DATA_STORES.map((s) => db.getAll(s)), db.getAll('kv'),
     ]);
     const meta = Object.fromEntries(kv.map((r) => [r.key, r.value]));
@@ -56,7 +59,7 @@ export async function init() {
       load(m);
       log('migrated', m.sessions.length, 'sessions');
     } else {
-      load({ sessions, events, pages, projects, tasks, routines, routineLog, assets, cards, settings: meta.settings || {} });
+      load({ sessions, events, pages, projects, tasks, routines, routineLog, assets, cards, combos, settings: meta.settings || {} });
       if (meta.schema < SCHEMA) await db.put('kv', { key: 'schema', value: SCHEMA });
     }
   } catch (e) {
@@ -80,6 +83,7 @@ function load(d) {
   state.routines = [...(d.routines || [])];
   state.routineLog = [...(d.routineLog || [])];
   state.cards = [...(d.cards || [])].map(cardsLib.upgradeCard).sort((a, b) => b.createdAt - a.createdAt);
+  state.combos = [...(d.combos || [])].sort((a, b) => a.createdAt - b.createdAt);
   state.assets = [...(d.assets || [])].sort((a, b) => a.createdAt - b.createdAt);
   state.settings = { theme: 'pearl', ...(d.settings || {}) };
 }
@@ -296,8 +300,9 @@ export function removeProject(id) {
   const gone = state.tasks.filter((t) => t.projectId === id);
   state.projects = state.projects.filter((p) => p.id !== id);
   state.tasks = state.tasks.filter((t) => t.projectId !== id);
+  const cops = dropFromCombos('task', new Set(gone.map((t) => t.id)));
   emit('plan');
-  return write(db.batch([{ store: 'projects', del: id }, ...gone.map((t) => ({ store: 'tasks', del: t.id }))]));
+  return write(db.batch([{ store: 'projects', del: id }, ...gone.map((t) => ({ store: 'tasks', del: t.id })), ...cops]));
 }
 
 export function addTask(input) {
@@ -332,7 +337,7 @@ export function setTaskDone(id, done) {
   targets.forEach((t) => putIn(state.tasks, t));
   emit('plan');
   const unlocked = done ? planner.unlockedBy(id, state.tasks) : [];
-  return write(db.batch(targets.map((t) => ({ store: 'tasks', put: t })))).then(() => ({ unlocked }));
+  return write(db.batch(targets.map((t) => ({ store: 'tasks', put: t })))).then(settleCombos).then(() => ({ unlocked }));
 }
 
 /** Deleting a task deletes its sub-steps and releases anything that was waiting on them. */
@@ -341,8 +346,9 @@ export function removeTask(id) {
   const freed = state.tasks.filter((t) => !gone.has(t.id) && gone.has(t.dependsOn)).map((t) => ({ ...t, dependsOn: null }));
   state.tasks = state.tasks.filter((t) => !gone.has(t.id));
   freed.forEach((t) => putIn(state.tasks, t));
+  const cops = dropFromCombos('task', gone);
   emit('plan');
-  return write(db.batch([...[...gone].map((g) => ({ store: 'tasks', del: g })), ...freed.map((t) => ({ store: 'tasks', put: t }))]));
+  return write(db.batch([...[...gone].map((g) => ({ store: 'tasks', del: g })), ...freed.map((t) => ({ store: 'tasks', put: t })), ...cops]));
 }
 
 /**
@@ -424,7 +430,7 @@ export function removeRoutine(id) {
   const logs = state.routineLog.filter((l) => l.routineId === id);
   state.routines = state.routines.filter((r) => r.id !== id);
   state.routineLog = state.routineLog.filter((l) => l.routineId !== id);
-  const ops = [{ store: 'routines', del: id }, ...logs.map((l) => ({ store: 'routineLog', del: l.id }))];
+  const ops = [{ store: 'routines', del: id }, ...logs.map((l) => ({ store: 'routineLog', del: l.id })), ...dropFromCombos('habit', new Set([id]))];
   if (cur?.status === 'active') {
     // The chain never stands empty: the next habit in line takes its place.
     const next = planner.habitChain(state.routines, state.routineLog).queued[0];
@@ -441,13 +447,14 @@ export function setRoutineDone(routineId, date, done, slot = 0) {
   const rec = { id, routineId, date, slot: n, doneAt: Date.now() };
   if (done) state.routineLog.push(rec);
   emit('plan');
-  return write(done ? db.put('routineLog', rec) : db.del('routineLog', id));
+  return write(done ? db.put('routineLog', rec) : db.del('routineLog', id)).then(settleCombos);
 }
 
 export const BALANCE_BONUS = 5;
 /** Food earned by balanced weeks (every area with a target reached it). */
 export function deerBonus(now = Date.now()) {
-  return balancedWeeks({ sessions: state.sessions, routines: state.routines, routineLog: state.routineLog, targets: state.settings.targets || {} }, now).length * BALANCE_BONUS;
+  return balancedWeeks({ sessions: state.sessions, routines: state.routines, routineLog: state.routineLog, targets: state.settings.targets || {} }, now).length * BALANCE_BONUS
+    + combosLib.comboBonus(state.combos);
 }
 
 /** Give the deer one piece of food, if there is any. Returns the state before and after. */
@@ -562,12 +569,100 @@ export function setSetting(key, value) {
   return write(db.put('kv', { key: 'settings', value: state.settings }));
 }
 
+// ── combos ─────────────────────────────────────────────────────────────────
+export const getCombo = (id) => byId(state.combos, id);
+const comboCtx = () => ({ tasks: state.tasks, routines: state.routines, routineLog: state.routineLog });
+export const comboProgress = (c, now = Date.now()) => combosLib.comboProgress(c, comboCtx(), now);
+
+/**
+ * Save a combo. Consecutive task steps are also linked with "starts after", so the chain shows
+ * in the projects too (a link the user already set is kept).
+ */
+export function addCombo(input) {
+  const c = combosLib.newCombo(input);
+  state.combos.push(c);
+  const linked = chainTasks(c);
+  emit('plan');
+  return write(db.batch([{ store: 'combos', put: c }, ...linked.map((t) => ({ store: 'tasks', put: t }))])).then(() => c);
+}
+
+function chainTasks(c) {
+  const out = [];
+  for (let i = 1; i < c.steps.length; i++) {
+    const a = c.steps[i - 1], b = c.steps[i];
+    if (a.kind !== 'task' || b.kind !== 'task') continue;
+    const t = getTask(b.ref);
+    if (!t || t.dependsOn) continue;
+    try { const n = planner.editTask(t, { dependsOn: a.ref }, state.tasks); putIn(state.tasks, n); out.push(n); } catch { /* would loop: leave it */ }
+  }
+  return out;
+}
+
+export function updateCombo(id, patch) {
+  const cur = getCombo(id);
+  if (!cur) return Promise.resolve();
+  const steps = patch.steps ?? cur.steps;
+  if (steps.length < 2) return Promise.reject(new tracker.ValidationError('Bir combo en az iki adımdan oluşur.'));
+  const c = { ...cur, ...('title' in patch ? { title: String(patch.title || '').trim().slice(0, 80) || 'Combo' } : {}), ...('repeat' in patch ? { repeat: !!patch.repeat } : {}), steps, updatedAt: Date.now() };
+  putIn(state.combos, c);
+  const linked = chainTasks(c);
+  emit('plan');
+  return write(db.batch([{ store: 'combos', put: c }, ...linked.map((t) => ({ store: 'tasks', put: t }))])).then(() => c);
+}
+
+export function removeCombo(id) {
+  state.combos = state.combos.filter((c) => c.id !== id);
+  emit('plan');
+  return write(db.del('combos', id));
+}
+
+/**
+ * Start the combo again from its first step today. In a repeating combo the task steps are
+ * opened again (their measured time stays); habit steps simply count from today.
+ */
+export function restartCombo(id) {
+  const cur = getCombo(id);
+  if (!cur) return Promise.resolve();
+  const now = Date.now(), c = { ...cur, runStart: isoDate(now), updatedAt: now };
+  const reopened = cur.repeat ? cur.steps.filter((s) => s.kind === 'task').map((s) => getTask(s.ref)).filter((t) => t?.done)
+    .map((t) => ({ ...t, done: false, doneAt: null, plannedDay: null, scheduledAt: null, updatedAt: now })) : [];
+  reopened.forEach((t) => putIn(state.tasks, t));
+  putIn(state.combos, c);
+  emit('plan');
+  return write(db.batch([{ store: 'combos', put: c }, ...reopened.map((t) => ({ store: 'tasks', put: t }))]));
+}
+
+/** Record finished runs once (they feed the deer). */
+function settleCombos() {
+  const now = Date.now(), changed = [];
+  for (const c of state.combos) {
+    const pr = combosLib.comboProgress(c, comboCtx(), now);
+    if (pr.status !== 'done' || (c.runs || []).some((r) => r.start === c.runStart)) continue;
+    const n = { ...c, runs: [...(c.runs || []), { start: c.runStart, at: now, n: pr.count }], updatedAt: now };
+    putIn(state.combos, n); changed.push(n);
+  }
+  if (!changed.length) return;
+  emit('plan');
+  return write(db.batch(changed.map((c) => ({ store: 'combos', put: c }))));
+}
+
+function dropFromCombos(kind, refs) {
+  const ops = [];
+  state.combos = state.combos.flatMap((c) => {
+    const steps = c.steps.filter((s) => !(s.kind === kind && refs.has(s.ref)));
+    if (steps.length === c.steps.length) return [c];
+    if (steps.length < 2) { ops.push({ store: 'combos', del: c.id }); return []; }
+    const n = { ...c, steps, updatedAt: Date.now() }; ops.push({ store: 'combos', put: n }); return [n];
+  });
+  return ops;
+}
+
 // ── backup / restore ───────────────────────────────────────────────────────
 export function exportData() {
   return {
     app: 'time-garden', schema: SCHEMA, exportedAt: new Date().toISOString(),
     sessions: state.sessions, events: state.events, pages: [...state.pages.values()],
-    projects: state.projects, tasks: state.tasks, routines: state.routines, routineLog: state.routineLog, assets: state.assets, cards: state.cards, settings: state.settings,
+    projects: state.projects, tasks: state.tasks, routines: state.routines, routineLog: state.routineLog, assets: state.assets, cards: state.cards, combos: state.combos, settings: state.settings,
   };
 }
 

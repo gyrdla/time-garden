@@ -145,7 +145,7 @@ test('v1 localStorage data migrates without loss', () => {
 test('import accepts v1 and v2 backups and rejects anything else', () => {
   assert.throws(() => normalizeImport({ foo: 1 }));
   assert.throws(() => normalizeImport({ app: 'time-garden', schema: 99, sessions: [] }));
-  assert.equal(normalizeImport({ activities: [], pages: {} }).schema, 5);
+  assert.equal(normalizeImport({ activities: [], pages: {} }).schema, 6);
   const ok = normalizeImport({ app: 'time-garden', schema: 2, sessions: [
     { id: 'a', name: 'A', startedAt: 1, endedAt: 5 }, { id: 'bad', name: 'B', startedAt: 9, endedAt: 2 }], events: [] });
   assert.equal(ok.sessions.length, 1);
