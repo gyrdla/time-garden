@@ -13,6 +13,7 @@ import { renderPlanDial } from './dial.js';
 import { balance } from '../core/balance.js';
 import { fileToImage, makeCover } from './camera.js';
 import { embedHtml } from './studio.js';
+import { hostOf } from '../core/cards.js';
 import { cardsOfTask } from '../core/cards.js';
 import { parallelHtml, bindParallel } from './home.js';
 
@@ -502,7 +503,8 @@ function taskCard(t) {
   const kids = P.childrenOf(tasks, t.projectId, t.id), blocked = P.isBlocked(t, tasks), dep = t.dependsOn && store.getTask(t.dependsOn);
   const spent = P.actualMs(t.id, sessions, events), picked = t.plannedDay === todayIso() && t.scheduledAt == null;
   const when = t.scheduledAt != null ? whenText(t.scheduledAt) : (t.plannedDay ? (t.plannedDay === todayIso() ? 'bugün' : dayText(t.plannedDay)) : '');
-  const meta = [kids.length ? `${kids.filter((k) => P.isDone(k, tasks)).length}/${kids.length} adım` : '', t.estimateMin ? `${t.estimateMin} dk` : '', spent ? `${fmtDur(spent)} ölçüldü` : '', when,
+  const est = kids.length ? null : P.smartEstimate(t, tasks, sessions, events);
+  const meta = [kids.length ? `${kids.filter((k) => P.isDone(k, tasks)).length}/${kids.length} adım` : '', est ? `≈ ${fmtDur(est.minutes * MIN)}` : '', spent ? `${fmtDur(spent)} ölçüldü` : '', when,
     t.category && store.getProject(t.projectId)?.life ? esc(t.category) : '', blocked && dep ? `bekliyor: ${esc(dep.title)}` : ''].filter(Boolean);
   const links = cardCounts(t);
   return `<div class="tcard${blocked ? ' blocked' : ''}">
@@ -673,32 +675,40 @@ export function openTask(id) {
   const linkedCards = cardsOfTask(store.state.cards, t).filter((c) => c.kind !== 'idea');
   const allCards = store.state.cards;
   const direct = new Set(t.cardIds || []);
-  openSheet('Görev', `<form id="f">
-    <label class="field">Ne?<input name="title" required maxlength="160" value="${esc(t.title)}" autocomplete="off"></label>
-    <label class="field">Nasıl? (yöntem, malzeme, not)<textarea name="how" rows="2" placeholder="Örn. doğal ışık, 9:16, üç plan">${esc(t.how)}</textarea></label>
-    ${p?.life ? `<label class="field">Alan<select name="cat">${CATEGORIES.map((c) => `<option${c === (t.category || 'Kişisel') ? ' selected' : ''}>${c}</option>`).join('')}</select></label>` : ''}
-    <label class="field">Tahmini süre (dakika)<input name="est" type="number" inputmode="numeric" min="1" max="1440" value="${t.estimateMin ?? ''}" placeholder="30"></label>
-    ${hist ? `<div class="chips"><button type="button" class="chip" data-est="${hist.minutes}">Bu iş sende genelde ${hist.minutes} dk sürüyor (${hist.samples} kayıt)</button></div>` : ''}
-    <label class="field">Ne zaman? (saatli)<input name="when" type="datetime-local" value="${t.scheduledAt != null ? toLocalInput(t.scheduledAt) : ''}"></label>
-    <div class="chips">${slots.map((s) => `<button type="button" class="chip" data-slot="${s.ts}">${whenText(s.ts)} · ${esc(s.why)}</button>`).join('')}${t.scheduledAt != null ? '<button type="button" class="chip" data-slot="">Saati kaldır</button>' : ''}</div>
-    <label class="field">Ya da yalnızca gün seç (saat sonra)<input name="day" type="date" value="${t.plannedDay || ''}"></label>
-    <div class="chips"><button type="button" class="chip" data-pick="${todayIso()}">Bugün için seç</button><button type="button" class="chip" data-pick="${isoDate(Date.now() + 86_400_000)}">Yarın</button><button type="button" class="chip" data-pick="">Günü kaldır</button></div>
-    <label class="field">Zincir: şu bitince başlasın<select name="dep"><option value="">— bağımsız —</option>${deps.map((x) => `<option value="${x.id}"${x.id === t.dependsOn ? ' selected' : ''}>${esc(x.title)}</option>`).join('')}</select></label>
-    <label class="check"><input type="checkbox" name="par"${t.parallel ? ' checked' : ''}>Başka bir işle aynı anda yapılabilir (çekim sırasında makyaj gibi)</label>
-    ${spent ? `<p class="hint">Bu göreve şimdiye kadar ölçülen: ${fmtDur(spent)}</p>` : ''}
-    ${subs.length ? `<div class="field"><span>Alt görevler · ${subs.filter((x) => P.isDone(x, tasks)).length}/${subs.length}</span><ul class="sub-list">${subs.map((x) => `<li class="${P.isDone(x, tasks) ? 'done' : ''}">
+  const est = P.smartEstimate(t, tasks, sessions, events);
+  const whenNow = t.scheduledAt != null ? whenText(t.scheduledAt) : (t.plannedDay ? (t.plannedDay === todayIso() ? 'Bugün' : dayText(t.plannedDay)) : '');
+  openSheet(p?.life ? 'Hayatım' : (p?.name || 'Görev'), `<form id="f" class="task-sheet">
+    <input class="ts-title" name="title" required maxlength="160" value="${esc(t.title)}" autocomplete="off" aria-label="Görev adı">
+    <div class="ts-meta">${est ? `<span class="ts-est" title="${esc(P.ESTIMATE_WHY[est.source])}">≈ ${fmtDur(est.minutes * MIN)}<small>${P.ESTIMATE_WHY[est.source]}${est.samples ? ` · ${est.samples} kayıt` : ''}</small></span>` : '<span class="ts-est none">Süre tahmini yok<small>ölçtükçe oluşur</small></span>'}
+      ${spent ? `<span class="ts-spent">${fmtDur(spent)}<small>ölçüldü</small></span>` : ''}${whenNow ? `<span class="ts-spent">${esc(whenNow)}<small>plan</small></span>` : ''}</div>
+    <div class="ts-quick"><button type="button" class="qbtn main" id="tStart">${icon('play')}Başlat</button>
+      <button type="button" class="qbtn${t.plannedDay === todayIso() ? ' on' : ''}" data-pick="${todayIso()}">☀ Bugün</button>
+      <button type="button" class="qbtn" data-pick="${isoDate(Date.now() + 86_400_000)}">Yarın</button></div>
+    ${subs.length || true ? `<div class="ts-sec"><span class="ts-h">Alt görevler${subs.length ? ` · ${subs.filter((x) => P.isDone(x, tasks)).length}/${subs.length}` : ''}</span>${subs.length ? `<ul class="sub-list">${subs.map((x) => `<li class="${P.isDone(x, tasks) ? 'done' : ''}">
       <button type="button" class="t-check" data-subtoggle="${x.id}" role="checkbox" aria-checked="${P.isDone(x, tasks)}" aria-label="Tamamla: ${esc(x.title)}">${P.isDone(x, tasks) ? '✓' : ''}</button>
       <button type="button" class="grow" data-subopen="${x.id}"><b>${esc(x.title)}</b>${subMeta(x) ? `<small>${subMeta(x)}</small>` : ''}</button>
-      ${P.isDone(x, tasks) ? '' : `<button type="button" class="mini-btn" data-substart="${x.id}" aria-label="Başlat">${icon('play')}</button>`}</li>`).join('')}</ul></div>` : ''}
-    <div class="field"><span>Bağlı tuto ve ilham</span>${linkedCards.length ? `<div class="task-cards">${linkedCards.map((c) => `<div class="tc-card"><div class="tc-card-h">${KIND_IC[c.kind]} <b>${esc(c.title || (c.kind === 'idea' ? (c.text || '').split('\n')[0] : c.url))}</b></div>${c.kind === 'idea' ? '' : embedHtml(c.url, { compact: true })}${c.text && c.kind !== 'idea' ? `<small>${esc(c.text)}</small>` : ''}</div>`).join('')}</div>` : ''}
-      ${allCards.length ? `<div class="chips" id="taskCardPick">${allCards.map((c) => `<button type="button" class="chip${direct.has(c.id) ? ' chosen' : ''}" data-tcard="${c.id}">${KIND_IC[c.kind]} ${esc((c.title || c.text || c.url || '').split('\n')[0].slice(0, 24))}</button>`).join('')}</div>` : '<span class="hint" style="text-align:left">Stüdyo’da kart oluşturunca buradan bağlayabilirsin.</span>'}</div>
+      ${P.isDone(x, tasks) ? '' : `<button type="button" class="mini-btn" data-substart="${x.id}" aria-label="Başlat">${icon('play')}</button>`}</li>`).join('')}</ul>` : ''}
+      <input class="sub-add" id="subAdd" maxlength="160" placeholder="＋ Alt adım ekle" autocomplete="off" enterkeyhint="done"></div>` : ''}
+    ${linkedCards.length ? `<div class="ts-sec"><span class="ts-h">Tuto ve ilham</span><div class="task-cards">${linkedCards.map((c) => `<div class="tc-card">${embedHtml(c.url, { compact: true })}<div class="tc-card-h">${KIND_IC[c.kind]} <b>${esc(c.title || hostOf(c.url))}</b></div></div>`).join('')}</div></div>` : ''}
+    <details class="more"><summary>Ayrıntılar</summary>
+      <label class="field">Nasıl? (yöntem, malzeme, not)<textarea name="how" rows="2" placeholder="Örn. doğal ışık, 9:16, üç plan">${esc(t.how)}</textarea></label>
+      ${p?.life ? `<label class="field">Alan<select name="cat">${CATEGORIES.map((c) => `<option${c === (t.category || 'Kişisel') ? ' selected' : ''}>${c}</option>`).join('')}</select></label>` : ''}
+      <label class="field">Kendi tahminin (dakika)<input name="est" type="number" inputmode="numeric" min="1" max="1440" value="${t.estimateMin ?? ''}" placeholder="${est ? est.minutes : 30}"></label>
+      ${hist ? `<div class="chips"><button type="button" class="chip" data-est="${hist.minutes}">Bu iş sende genelde ${hist.minutes} dk (${hist.samples} kayıt)</button></div>` : ''}
+      <label class="field">Saatli plan<input name="when" type="datetime-local" value="${t.scheduledAt != null ? toLocalInput(t.scheduledAt) : ''}"></label>
+      <div class="chips">${slots.map((sl) => `<button type="button" class="chip" data-slot="${sl.ts}">${whenText(sl.ts)} · ${esc(sl.why)}</button>`).join('')}${t.scheduledAt != null ? '<button type="button" class="chip" data-slot="">Saati kaldır</button>' : ''}</div>
+      <label class="field">Gün (saat sonra)<input name="day" type="date" value="${t.plannedDay || ''}"></label>
+      <div class="chips"><button type="button" class="chip" data-pick="">Günü kaldır</button></div>
+      <label class="field">Zincir: şu bitince başlasın<select name="dep"><option value="">— bağımsız —</option>${deps.map((x) => `<option value="${x.id}"${x.id === t.dependsOn ? ' selected' : ''}>${esc(x.title)}</option>`).join('')}</select></label>
+      <label class="check"><input type="checkbox" name="par"${t.parallel ? ' checked' : ''}>Başka bir işle aynı anda yapılabilir</label>
+      ${allCards.length ? `<div class="field"><span>Kart bağla</span><div class="chips" id="taskCardPick">${allCards.map((c) => `<button type="button" class="chip${direct.has(c.id) ? ' chosen' : ''}" data-tcard="${c.id}">${KIND_IC[c.kind]} ${esc((c.title || c.text || c.url || '').split('\n')[0].slice(0, 24))}</button>`).join('')}</div></div>` : ''}
+      <div class="more-acts"><button type="button" class="btn ghost sm" id="tBreak">${icon('spark')}Adımlara böl</button>
+        ${kids ? '<button type="button" class="btn ghost sm" id="tTpl">Şablon olarak kaydet</button>' : ''}
+        ${p?.life ? '<button type="button" class="btn ghost sm" id="tHabit">↻ Alışkanlık zincirine gönder</button>' : ''}
+        <button type="button" class="btn danger sm" id="del">Sil</button></div>
+    </details>
     <p class="form-error" role="alert"></p>
-    <div class="sheet-actions"><button class="btn full">Kaydet</button>
-    <div class="field-row"><button type="button" class="btn ghost" id="tStart">${icon('play')}Başlat</button><button type="button" class="btn ghost" id="tBreak">${icon('spark')}Adımlara böl</button></div>
-    ${p?.life ? '<button type="button" class="btn ghost full" id="tHabit">↻ Düzenli yapmak istiyorum: alışkanlık zincirine gönder</button>' : ''}
-    <button type="button" class="btn ghost full" id="tSub">＋ Alt adım ekle</button>
-    ${kids ? '<button type="button" class="btn ghost full" id="tTpl">Bu adımları şablon olarak kaydet</button>' : ''}
-    <button type="button" class="btn danger full" id="del">Görevi sil</button></div></form>`);
+    <button class="btn full">Kaydet</button></form>`);
   const f = $('#f', body());
   $$('[data-est]', body()).forEach((b) => { b.onclick = () => { f.est.value = b.dataset.est; }; });
   $$('[data-slot]', body()).forEach((b) => { b.onclick = () => { f.when.value = b.dataset.slot ? toLocalInput(Number(b.dataset.slot)) : ''; }; });
@@ -706,17 +716,27 @@ export function openTask(id) {
   $$('[data-subtoggle]', body()).forEach((b) => { b.onclick = () => act(store.updateTask(t.id, patch()).then(() => toggleTask(b.dataset.subtoggle, b)).then(() => openTask(t.id))); });
   $$('[data-subopen]', body()).forEach((b) => { b.onclick = () => act(store.updateTask(t.id, patch()).then(() => openTask(b.dataset.subopen))); });
   $$('[data-substart]', body()).forEach((b) => { b.onclick = () => act(store.updateTask(t.id, patch()).then(() => { closeSheet(); startTask(b.dataset.substart); })); });
-  $$('[data-pick]', body()).forEach((b) => { b.onclick = () => { f.day.value = b.dataset.pick; if (!b.dataset.pick) f.when.value = ''; }; });
+  $$('[data-pick]', body()).forEach((b) => {
+    b.onclick = () => {
+      f.day.value = b.dataset.pick;
+      if (!b.dataset.pick) { f.when.value = ''; return; }
+      // Quick picks save right away: one tap, done.
+      run(() => store.updateTask(t.id, patch()), b.dataset.pick === todayIso() ? 'Bugün için seçildi' : 'Yarına eklendi');
+    };
+  });
   const patch = () => ({ cardIds: [...direct], ...(f.cat ? { category: f.cat.value } : {}), title: f.title.value, how: f.how.value, estimateMin: f.est.value, plannedDay: f.day.value || null, scheduledAt: f.when.value ? fromLocalInput(f.when.value) : null, dependsOn: f.dep.value || null, parallel: f.par.checked });
   f.onsubmit = (e) => { e.preventDefault(); run(() => store.updateTask(t.id, patch()), 'Kaydedildi'); };
   $('#tStart', body()).onclick = () => act(store.updateTask(t.id, patch()).then(() => { closeSheet(); startTask(t.id); }));
   $('#tBreak', body()).onclick = () => openBreakdown(store.getTask(t.id));
   const th = $('#tHabit', body());
   if (th) th.onclick = () => run(() => store.updateTask(t.id, patch()).then(() => store.taskToHabit(t.id)).then((r) => toast(r.status === 'active' ? `“${r.title}” alışkanlık oldu; şimdi onun üzerinde çalışıyorsun` : `“${r.title}” alışkanlık zincirinde sıraya girdi`)));
-  $('#tSub', body()).onclick = () => {
-    const title = prompt('Alt adım:');
-    if (title && title.trim()) act(store.updateTask(t.id, patch()).then(() => store.addTask({ projectId: t.projectId, parentId: t.id, title })).then(() => openTask(t.id)));
-  };
+  const sa = $('#subAdd', body());
+  if (sa) sa.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const title = sa.value.trim();
+    if (title) act(store.updateTask(t.id, patch()).then(() => store.addTask({ projectId: t.projectId, parentId: t.id, title })).then(() => { openTask(t.id); setTimeout(() => $('#subAdd')?.focus(), 50); }));
+  });
   if (kids) $('#tTpl', body()).onclick = () => run(() => store.saveTemplate(t.id), 'Şablon kaydedildi; aynı adlı işlerde önerilir');
   $('#del', body()).onclick = () => {
     const n = P.descendants(tasks, t.id).length;

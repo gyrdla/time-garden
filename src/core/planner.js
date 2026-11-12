@@ -221,6 +221,51 @@ export function historyEstimate(title, sessions, events) {
   return { minutes: Math.max(1, Math.round(median / MIN)), samples: durs.length };
 }
 
+const median = (xs) => { const a = [...xs].sort((x, y) => x - y), m = a.length >> 1; return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };
+const isLeaf = (t, tasks) => !tasks.some((k) => k.parentId === t.id);
+
+/** How much longer (or shorter) than planned the user's finished steps really took: median ratio. */
+export function paceRatio(tasks, sessions, events, min = 3) {
+  const r = tasks.filter((t) => t.done && t.estimateMin && isLeaf(t, tasks))
+    .map((t) => actualMs(t.id, sessions, events) / (t.estimateMin * MIN)).filter((x) => x > 0.05);
+  return r.length >= min ? { ratio: Math.min(4, Math.max(0.3, median(r))), samples: r.length } : null;
+}
+
+/**
+ * The best estimate the user's own records allow, with where it came from:
+ *  history  the same work, measured before (median)
+ *  pace     the user's estimate, corrected by how their estimates usually turn out
+ *  set      the user's estimate, with no record to correct it
+ *  project  the median measured step of this project
+ * Returns null when there is nothing to go on.
+ */
+export function smartEstimate(task, tasks, sessions, events) {
+  const hist = historyEstimate(task.title, sessions, events);
+  if (hist) return { minutes: hist.minutes, source: 'history', samples: hist.samples };
+  const pace = paceRatio(tasks, sessions, events);
+  if (task.estimateMin && pace) return { minutes: Math.max(1, Math.round(task.estimateMin * pace.ratio)), source: 'pace', samples: pace.samples, base: task.estimateMin };
+  if (task.estimateMin) return { minutes: task.estimateMin, source: 'set', samples: 0 };
+  const done = tasks.filter((t) => t.projectId === task.projectId && t.done && isLeaf(t, tasks)).map((t) => actualMs(t.id, sessions, events)).filter((ms) => ms >= MIN);
+  if (done.length >= 3) return { minutes: Math.max(1, Math.round(median(done) / MIN)), source: 'project', samples: done.length };
+  return null;
+}
+
+export const ESTIMATE_WHY = { history: 'bu işin önceki ölçümlerinden', pace: 'tahminin, senin hızına göre düzeltildi', set: 'senin tahminin', project: 'bu projedeki adımların ortası' };
+
+/** What is still ahead today: planned items not done whose time has not passed, plus picked steps. */
+export function todayLoad(tasks, routines, routineLog, projects, sessions, events, now = Date.now()) {
+  const range = dayRange(now), iso = isoDate(now), byId = new Map(tasks.map((t) => [t.id, t]));
+  const items = agenda(range, tasks, routines, routineLog, projects).filter((i) => !i.done && i.end > now);
+  const picked = dayTray(iso, tasks, projects);
+  let ms = 0, guessed = 0;
+  for (const i of items) {
+    if (i.kind === 'task') { const e = smartEstimate(byId.get(i.id), tasks, sessions, events); ms += (e ? e.minutes : 30) * MIN; if (!e) guessed++; }
+    else ms += i.end - Math.max(i.start, now);
+  }
+  for (const t of picked) { const e = smartEstimate(t, tasks, sessions, events); ms += (e ? e.minutes : 30) * MIN; if (!e) guessed++; }
+  return { count: items.length + picked.length, ms, guessed, next: items[0] || null, picked: picked.length, leftMs: Math.max(0, range[1] - now) };
+}
+
 /** Hours of day in which this category has actually been worked, over the last `days` days. */
 export function categoryHours(category, sessions, now = Date.now(), days = 28) {
   const hours = new Array(24).fill(0), from = now - days * DAY;

@@ -253,3 +253,27 @@
 .tc-card-h b{font-weight:500}
 .tc-card small{display:block;padding:var(--s2) var(--s3);font-size:var(--fs-xs);color:var(--ink-soft)}
 #taskCardPick{margin-top:var(--s2)}
+
+/* ── minimal task sheet ── */
+.task-sheet{display:grid;gap:var(--s3)}
+.ts-title{width:100%;border:0;background:none;font:500 var(--fs-xl)/1.2 var(--font-ui);color:var(--ink);padding:0;outline:0}
+.ts-meta{display:flex;flex-wrap:wrap;gap:var(--s4)}
+.ts-est,.ts-spent{display:flex;flex-direction:column;font-size:var(--fs-lg);font-weight:500;font-variant-numeric:tabular-nums}
+.ts-est small,.ts-spent small{font-size:var(--fs-xs);font-weight:400;color:var(--ink-soft)}
+.ts-est.none{font-size:var(--fs-sm);color:var(--ink-soft)}
+.ts-quick{display:flex;gap:var(--s2)}
+.qbtn{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;border-radius:var(--r-pill);background:var(--surface-sunk);font-size:var(--fs-sm);font-weight:500;color:var(--ink)}
+.qbtn .ic{width:16px;height:16px}
+.qbtn.main{background:var(--cta);color:var(--on-accent)}
+.qbtn.on{outline:2px solid var(--accent-ink)}
+.ts-sec{display:grid;gap:var(--s2)}
+.ts-h{font-size:var(--fs-xs);color:var(--ink-soft);letter-spacing:.04em;text-transform:uppercase}
+.sub-add{width:100%;min-height:44px;padding:0 var(--s3);border:1px dashed var(--line-soft);border-radius:var(--r-sm);background:none;font-size:16px}
+.more{border-top:1px solid var(--line-soft);padding-top:var(--s2)}
+.more>summary{list-style:none;min-height:40px;display:flex;align-items:center;gap:6px;font-size:var(--fs-sm);color:var(--ink-soft);cursor:pointer}
+.more>summary::-webkit-details-marker{display:none}
+.more>summary::before{content:"▸";font-size:12px}
+.more[open]>summary::before{content:"▾"}
+.more[open]{display:grid;gap:var(--s2)}
+.more-acts{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s2)}
+.tc-card .embed{border-radius:0}

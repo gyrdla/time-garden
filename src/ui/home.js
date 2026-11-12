@@ -4,11 +4,11 @@ import { $, $$, esc, icon, toast, haptic, catColor, fmtLongDate, WEEKDAYS } from
 import * as store from '../core/store.js';
 import { isPaused, ValidationError } from '../core/tracker.js';
 import { dayRange, summarize, sessionElapsed, sessionActive, eventInterval, clip, clipAll, total, fmtDur, fmtClock, fmtLive, fmtTime, isoDate, DAY } from '../core/time.js';
-import { periodRange } from '../core/analytics.js';
 import { renderDial } from './dial.js';
 import { openStart, openSecondary, openPast, openEditSession, openEditEvent } from './sheets.js';
 import { openDay } from './nav.js';
 import { afterFinish } from './plan.js';
+import { todayLoad } from '../core/planner.js';
 import { renderStudio } from './studio.js';
 
 function act(promise) {
@@ -18,22 +18,20 @@ function act(promise) {
 function renderLive() {
   const card = $('#liveCard'), s = store.activeSession(), now = Date.now();
   const open = store.openEvents();
-  const sub = `<div class="live-sub">${parallelHtml(now)}<div class="chips"><button class="chip add" id="addSecondary">＋ Paralel</button></div></div>`;
 
   if (!s) {
-    card.className = 'card live';
-    card.innerHTML = `<p class="idle-title">Şu an ne yapıyorsun?</p><p class="idle-sub">Başlat'a bas, bitirdiğinde durdur. Süreyi saat ölçer, sen yazmazsın.</p>
-      <button class="btn full" id="startBtn">${icon('play')}Etkinlik başlat</button>${sub}`;
+    card.className = 'card live compact';
+    card.innerHTML = `<div class="live-row"><span class="idle-title">Şu an ne yapıyorsun?</span>
+      <button class="btn sm" id="startBtn">${icon('play')}Başlat</button><button class="chip add" id="addSecondary">＋ Paralel</button></div>${parallelHtml(now)}`;
     $('#startBtn').onclick = openStart;
   } else {
     const paused = isPaused(s);
-    card.className = 'card live' + (paused ? ' paused' : '');
-    card.innerHTML = `<div class="live-top"><div><p class="live-name">${esc(s.name)}</p>
-      <p class="live-meta"><span class="pulse"></span>${paused ? 'Duraklatıldı' : 'Sürüyor'} · ${fmtTime(s.startedAt)}'den beri · ${esc(s.category)}</p></div>
-      <button class="icon-btn sm" id="editLive" aria-label="Düzenle">✎</button></div>
-      <p class="live-clock" id="liveClock">${fmtClock(sessionElapsed(s, now))}</p>
-      <div class="live-actions"><button class="btn ghost" id="pauseBtn">${icon(paused ? 'play' : 'pause')}${paused ? 'Devam et' : 'Duraklat'}</button>
-      <button class="btn" id="finishBtn">${icon('stop')}Bitir</button></div>${sub}`;
+    card.className = 'card live compact' + (paused ? ' paused' : '');
+    card.innerHTML = `<div class="live-row"><span class="pulse"></span><button class="live-name" id="editLive">${esc(s.name)}<small>${paused ? 'duraklatıldı' : `${fmtTime(s.startedAt)}'den beri`}</small></button>
+      <span class="live-clock" id="liveClock">${fmtClock(sessionElapsed(s, now))}</span>
+      <button class="mini-btn" id="pauseBtn" aria-label="${paused ? 'Devam et' : 'Duraklat'}">${icon(paused ? 'play' : 'pause')}</button>
+      <button class="mini-btn stop" id="finishBtn" aria-label="Bitir">${icon('stop')}</button></div>
+      ${parallelHtml(now)}<div class="chips"><button class="chip add" id="addSecondary">＋ Paralel</button></div>`;
     $('#editLive').onclick = () => openEditSession(s.id);
     $('#pauseBtn').onclick = () => { haptic(); act(store.togglePause()); };
     $('#finishBtn').onclick = () => { haptic(20); act(store.finish().then(afterFinish)); };
@@ -45,21 +43,19 @@ function renderLive() {
 
 function renderToday() {
   const now = Date.now(), range = dayRange(now);
-  const { sessions, events } = store.state;
+  const st = store.state, { sessions, events } = st;
   const sum = summarize(sessions, events, range, now);
-  $('#todayTitle').textContent = `Bugün · ${fmtLongDate(now)}`;
-  $('#todayRemain').textContent = `Kalan gün ${fmtDur(range[1] - now)}`;
+  $('#todayTitle').textContent = fmtLongDate(now);
   renderDial($('#dial'), sessions, events, range, now);
   $('#dialValue').textContent = fmtDur(sum.uniqueMs);
-  $('#dialLabel').textContent = `günün %${Math.round((sum.uniqueMs / DAY) * 100)}'i kayıtlı`;
-  const cats = Object.entries(sum.byCategory).sort((a, b) => b[1] - a[1]);
-  $('#todayLegend').innerHTML = cats.length
-    ? cats.map(([c, ms]) => `<li><span class="dot" style="--c:${catColor(c)}"></span><span>${esc(c)}</span><span>${fmtDur(ms)}</span></li>`).join('')
-      + (sum.secondaryMs ? `<li><span class="dot" style="--c:var(--secondary)"></span><span>Paralel</span><span>${fmtDur(sum.secondaryMs)}</span></li>` : '')
-    : '<li class="empty">Bugün henüz kayıt yok.</li>';
-  $('#todayStats').innerHTML = `<div class="stat"><b>${fmtDur(sum.primaryMs)}</b><small>Ana etkinlik</small></div>
-    <div class="stat"><b>${fmtDur(sum.focusMs)}</b><small>Tek başına odak</small></div>
-    <div class="stat"><b>${fmtDur(sum.concurrentMs)}</b><small>Aynı anda</small></div>`;
+  $('#dialLabel').textContent = 'kayıtlı';
+  const L = todayLoad(st.tasks, st.routines, st.routineLog, st.projects, sessions, events, now);
+  const fits = L.ms <= L.leftMs;
+  $('#todayStats').innerHTML = `<li><span>Kalan</span><b>${fmtDur(L.leftMs)}</b></li>
+    <li><span>Plan</span><b>${L.count ? `≈ ${fmtDur(L.ms)}` : '—'}</b>${L.count ? `<em class="${fits ? 'ok' : 'over'}">${fits ? 'sığıyor' : `${fmtDur(L.ms - L.leftMs)} fazla`}</em>` : ''}</li>
+    ${L.next ? `<li class="next"><span>Sırada</span><b>${esc(L.next.title)}</b><em>${fmtTime(L.next.start)}</em></li>` : (L.picked ? `<li class="next"><span>Seçili</span><b>${L.picked} görev</b></li>` : '')}`;
+  const cats = Object.entries(sum.byCategory).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  $('#todayLegend').innerHTML = cats.map(([c, ms]) => `<span><i class="dot" style="--c:${catColor(c)}"></i>${esc(c)} ${fmtDur(ms)}</span>`).join('');
 }
 
 /** Every parallel record that is running or paused, each with its own pause / resume and finish. */
@@ -125,22 +121,8 @@ function renderFlow() {
   bindFlow(el);
 }
 
-function renderWeek() {
-  const now = Date.now(), [ws] = periodRange('week', now);
-  const { sessions, events } = store.state;
-  const days = WEEKDAYS.map((name, i) => {
-    const d = new Date(ws); d.setDate(d.getDate() + i);
-    const r = dayRange(d.getTime());
-    return { name, ts: r[0], iso: isoDate(r[0]), ms: r[0] > now ? 0 : summarize(sessions, events, r, now).uniqueMs, page: !!store.getPage(isoDate(r[0])) };
-  });
-  const max = Math.max(...days.map((d) => d.ms), 1);
-  $('#weekStrip').innerHTML = days.map((d) => `<button class="week-cell${d.iso === isoDate(now) ? ' today' : ''}" data-day="${d.iso}" aria-label="${d.name} ${new Date(d.ts).getDate()}, ${fmtDur(d.ms)}">
-    <span>${d.name}</span><b>${new Date(d.ts).getDate()}</b><span class="fill"><i style="height:${Math.round((d.ms / max) * 100)}%"></i></span><span>${d.page ? '✎' : '&nbsp;'}</span></button>`).join('');
-  $$('[data-day]', $('#weekStrip')).forEach((b) => { b.onclick = () => openDay(b.dataset.day); });
-}
-
 export function renderHome() {
-  renderLive(); renderToday(); renderStudio(); renderFlow(); renderWeek();
+  renderLive(); renderToday(); renderStudio(); renderFlow();
 }
 
 /** Called every second while Home is visible: only the cheap, changing bits. */

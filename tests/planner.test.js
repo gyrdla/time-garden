@@ -220,3 +220,23 @@ test('a habit appears only from its start day; twice-a-day habits need both to c
   assert.deepEqual([c.progress.done, c.progress.ready], [2, true]);
   assert.throws(() => P.newRoutine({ title: 'x', times: ['25:99'] }), ValidationError);
 });
+
+test('estimates: same work measured → its median; otherwise the user\'s pace; otherwise the project\'s steps', () => {
+  const S = (taskId, name, a, mins) => ({ id: taskId + a, taskId, name, category: 'Çalışma', startedAt: a, endedAt: a + mins * 60000, pauses: [] });
+  const t1 = { ...mk({ title: 'A', estimateMin: 20 }), done: true }, t2 = { ...mk({ title: 'B', estimateMin: 30 }), done: true }, t3 = { ...mk({ title: 'C', estimateMin: 10 }), done: true };
+  const sessions = [S(t1.id, 'A', at(9), 30), S(t2.id, 'B', at(10), 45), S(t3.id, 'C', at(11), 15)];   // always 1.5× the plan
+  const fresh = mk({ title: 'Yeni kurgu', estimateMin: 40 });
+  const all = [t1, t2, t3, fresh];
+  assert.deepEqual(P.paceRatio(all, sessions, []), { ratio: 1.5, samples: 3 });
+  assert.deepEqual(P.smartEstimate(fresh, all, sessions, []), { minutes: 60, source: 'pace', samples: 3, base: 40 });
+  assert.equal(P.smartEstimate(mk({ title: 'b' }), all, sessions, []).source, 'history');                 // same name as B
+  const noEst = mk({ title: 'Bambaşka' });
+  assert.deepEqual(P.smartEstimate(noEst, all, sessions, []), { minutes: 30, source: 'project', samples: 3 });
+  assert.equal(P.smartEstimate(noEst, [noEst], [], []), null);
+  assert.deepEqual(P.smartEstimate(fresh, [fresh], [], []), { minutes: 40, source: 'set', samples: 0 });
+  // what is left today
+  const later = { ...mk({ title: 'Yeni kurgu', estimateMin: 40, scheduledAt: at(16) }) };
+  const pick = { ...mk({ title: 'Bambaşka' }), plannedDay: '2026-11-11' };
+  const L = P.todayLoad([t1, t2, t3, later, pick], [], [], [], sessions, [], at(14));
+  assert.deepEqual([L.count, Math.round(L.ms / 60000), L.guessed, L.next.title, L.picked, Math.round(L.leftMs / 3600000)], [2, 90, 0, 'Yeni kurgu', 1, 10]);
+});

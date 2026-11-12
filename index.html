@@ -84,14 +84,13 @@
 
       <section class="card live" id="liveCard" aria-live="polite"></section>
 
-      <section class="card today">
-        <div class="card-head"><h2 id="todayTitle">Bugün</h2><span class="chip quiet" id="todayRemain"></span></div>
-        <div class="dial-wrap">
-          <svg id="dial" class="dial" viewBox="-14 -14 268 268" role="img" aria-label="Bugünün 24 saatlik zaman haritası"></svg>
-          <div class="dial-center"><strong id="dialValue">0 dk</strong><small id="dialLabel">kayıtlı</small></div>
+      <section class="card dash" id="todayCard">
+        <div class="dash-body">
+          <div class="dial-wrap mini"><svg id="dial" class="dial" viewBox="-14 -14 268 268" role="img" aria-label="Bugünün 24 saatlik zaman haritası"></svg>
+            <div class="dial-center"><strong id="dialValue">0 dk</strong><small id="dialLabel">kayıtlı</small></div></div>
+          <div class="dash-side"><p class="dash-date" id="todayTitle"></p><ul class="dash-stats" id="todayStats"></ul></div>
         </div>
-        <ul class="legend" id="todayLegend"></ul>
-        <div class="stat-row" id="todayStats"></div>
+        <div class="dash-cats" id="todayLegend"></div>
       </section>
 
       <section class="block studio" id="studio"></section>
@@ -101,10 +100,6 @@
         <div class="flow" id="todayFlow" hidden></div>
       </section>
 
-      <section class="block">
-        <div class="block-head"><h2>Bu hafta</h2><button class="btn ghost sm" data-go="calendar">Takvim</button></div>
-        <div class="week-strip" id="weekStrip"></div>
-      </section>
       <p class="hint" id="homeVersion"></p>
     </section>
 
