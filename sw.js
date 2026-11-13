@@ -1,13 +1,13 @@
 // Time Garden service worker: precache the app shell, serve it offline.
 // Bump VERSION on every release so installed apps pick up the new files.
-const VERSION = 'time-garden-v2.13.0';
+const VERSION = 'time-garden-v2.14.0';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './icon.svg',
   './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png',
   './styles/tokens.css', './styles/app.css', './styles/journal.css', './styles/plan.css', './styles/camera.css', './styles/studio.css',
   './src/main.js', './src/version.js', './assets/deer.gif', './assets/chest.webp', './assets/frames/square.webp', './assets/frames/bookmark.webp',
   './assets/folders/pearl.webp', './assets/folders/croc.webp', './assets/folders/dalmatian.webp', './assets/folders/zebra.webp', './assets/folders/fawn.webp', './assets/folders/metal.webp', './assets/folders/tiger.webp',
-  './src/core/time.js', './src/core/tracker.js', './src/core/analytics.js', './src/core/migrate.js', './src/core/db.js', './src/core/store.js', './src/core/planner.js', './src/core/balance.js', './src/core/cards.js', './src/core/combos.js', './src/core/chains.js',
+  './src/core/time.js', './src/core/tracker.js', './src/core/analytics.js', './src/core/migrate.js', './src/core/db.js', './src/core/store.js', './src/core/planner.js', './src/core/balance.js', './src/core/cards.js', './src/core/combos.js', './src/core/chains.js', './src/core/sequence.js',
   './src/ui/dom.js', './src/ui/nav.js', './src/ui/dial.js', './src/ui/home.js', './src/ui/sheets.js', './src/ui/calendar.js', './src/ui/analysis.js', './src/ui/journal.js', './src/ui/themes.js', './src/ui/plan.js', './src/ui/camera.js', './src/ui/studio.js', './src/ui/combos.js', './src/ui/chains.js',
   './fonts/dm-sans-latin-400-normal.woff2', './fonts/dm-sans-latin-ext-400-normal.woff2',
   './fonts/dm-sans-latin-500-normal.woff2', './fonts/dm-sans-latin-ext-500-normal.woff2',

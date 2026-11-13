@@ -5,6 +5,7 @@
 import { $, $$, esc, icon, toast, haptic, catColor, fmtLongDate, fmtMonth, fmtMonthName, WEEKDAYS, weekTitle, toLocalInput, fromLocalInput } from './dom.js';
 import * as store from '../core/store.js';
 import * as P from '../core/planner.js';
+import * as Q from '../core/sequence.js';
 import { CATEGORIES, ValidationError, isPaused } from '../core/tracker.js';
 import { dayRange, isoDate, fromIso, fmtDur, fmtTime, fmtClock, fmtLive, clipAll, sessionActive, sessionElapsed, MIN } from '../core/time.js';
 import { periodRange, shiftPeriod } from '../core/analytics.js';
@@ -348,15 +349,46 @@ function dayItems() {
   return P.layout(P.agenda(dayRange(dayAnchor), tasks, routines, routineLog, projects));
 }
 
+const skipOverflow = new Set(); // "böyle kalsın" answers for this visit: `${iso}|${slice}`
+
+function daySeq(now) {
+  const { tasks, routines, routineLog, projects, sessions, events } = store.state;
+  return Q.sequenceDay(isoDate(dayAnchor), { tasks, routines, routineLog, projects, sessions, events, running: store.activeSession()?.taskId || null }, now);
+}
+
+function seqHtml(slices, iso, isToday, now) {
+  const projName = (id) => { const p = store.getProject(id); return p ? (p.life ? 'Hayatım' : p.name) : ''; };
+  const step = (r) => `<div class="seq-row${r.running ? ' run' : ''}${r.overflow ? ' over' : ''}" data-seq="${r.task.id}" data-drag="${r.task.id}" style="--c:${projColor(r.task.projectId)}"><span class="grip" aria-label="Sürükle">⠿</span>
+      <span class="seq-t">${r.running ? '● şimdi' : `≈${fmtTime(r.start)}`}<small>${r.minutes} dk${r.guessed ? '?' : ''}</small></span>
+      <button class="grow" data-task="${r.task.id}"><b>${esc(r.task.title)}</b><small>${esc(projName(r.task.projectId))}${r.overflow ? ' · sığmıyor' : ''}</small></button>
+      <span class="seq-acts"><button class="mini-btn" data-up="${r.task.id}" aria-label="Yukarı">↑</button><button class="mini-btn" data-down="${r.task.id}" aria-label="Aşağı">↓</button>
+      <button class="mini-btn" data-pin="${r.task.id}" data-at="${r.start}" aria-label="Bu saate sabitle">📌</button>
+      ${r.running ? `<button class="mini-btn" data-stop="${r.task.id}" aria-label="Bitir">${icon('stop')}</button>` : `<button class="mini-btn" data-start="${r.task.id}" aria-label="Başlat">${icon('play')}</button>`}</span></div>`;
+  const fixed = (r) => { const i = r.item;
+    return `<div class="seq-row fixed${i.done ? ' done' : ''}"${i.kind === 'task' ? ` data-drag="${i.id}"` : ''} style="--c:${i.kind === 'routine' ? 'var(--accent-2)' : projColor(i.projectId)}">${i.kind === 'task' ? '<span class="grip" aria-label="Sürükle">⠿</span>' : '<span class="grip off"></span>'}
+      <span class="seq-t">🔒 ${fmtTime(i.start)}<small>${Math.round((i.end - i.start) / MIN)} dk</small></span>
+      <button class="grow" data-kind="${i.kind}" data-id="${i.id}" data-slot="${i.slot || 0}"><b>${esc(i.title)}</b><small>${i.kind === 'routine' ? 'alışkanlık' : esc(projName(i.projectId))}${i.blocked ? ' · bekliyor' : ''}</small></button>
+      <span class="seq-acts">${i.kind === 'task' ? `<button class="mini-btn" data-unpin="${i.id}" aria-label="Saati kaldır, sıraya al">🔓</button><button class="mini-btn" data-start="${i.id}" aria-label="Başlat">${icon('play')}</button>`
+        : `<button class="mini-btn" data-rdone="${i.id}" data-slot="${i.slot || 0}" aria-label="Tamamla">✓</button>`}</span></div>`; };
+  const cur = isToday ? Q.sliceAt(now) : null;
+  return slices.map((sl, ix) => {
+    const over = sl.overflowMs > 0 && !skipOverflow.has(`${iso}|${sl.id}`), next = Q.SLICES[ix + 1];
+    const steps = sl.rows.filter((r) => r.kind === 'step');
+    return `<div class="seq-slice${sl.id === cur ? ' now' : ''}"><div class="seq-h"><b>${sl.label}</b><small>${String(sl.from).padStart(2, '0')}–${String(sl.to % 24).padStart(2, '0')}</small>
+        ${steps.length ? `<small class="grow-r">${steps.length} iş · ${fmtDur(steps.reduce((n, r) => n + (r.end - r.start), 0))}</small>` : ''}</div>
+      ${sl.rows.length ? sl.rows.map((r) => (r.kind === 'step' ? step(r) : fixed(r))).join('') : '<p class="seq-empty">boş</p>'}
+      ${over ? `<div class="seq-ask"><p>${sl.label} dilimine ~${fmtDur(sl.overflowMs)} sığmıyor. Sığmayanları ne yapalım?</p><div class="chips">
+        ${next ? `<button class="chip" data-ovnext="${sl.id}">${next.label}’e kaydır</button>` : ''}<button class="chip" data-ovtom="${sl.id}">Yarına</button><button class="chip quiet" data-ovkeep="${sl.id}">Böyle kalsın</button></div></div>` : ''}</div>`;
+  }).join('');
+}
+
 function dayView(now) {
   const items = dayItems(), iso = isoDate(dayAnchor), isToday = iso === isoDate(now);
-  const clash = P.conflicts(items), tray = P.dayTray(iso, store.state.tasks, store.state.projects);
-  const next = isToday ? items.find((i) => !i.done && i.end > now) : null;
-  const centre = !items.length ? ['Boş', tray.length ? 'saat ver' : 'plan yok'] : next ? [fmtTime(next.start), esc(next.title)] : [`${items.filter((i) => i.done).length}/${items.length}`, 'tamamlandı'];
-  const color = (i) => (i.kind === 'routine' ? 'var(--accent-2)' : projColor(i.projectId));
-  const row = (i) => `<div class="flow-item plan-row${i.done ? ' is-done' : ''}"${i.kind === 'task' && !i.done ? ` data-drag="${i.id}"` : ''}><span class="bar-c" style="--c:${color(i)}"></span>
-    <button class="grow" data-kind="${i.kind}" data-id="${i.id}" data-slot="${i.slot || 0}"><b>${i.done ? '✓ ' : ''}${esc(i.title)}</b><small>${fmtTime(i.start)}–${fmtTime(i.end)}${i.kind === 'routine' ? ' · rutin' : ` · ${esc(store.getProject(i.projectId)?.name || '')}`}${i.parallel ? ' · aynı anda' : ''}${i.blocked ? ' · bekliyor' : ''}</small></button>
-    <span class="row-acts">${i.kind === 'task' && !i.done ? '<span class="grip" aria-label="Sürükle">⠿</span>' : ''}${i.done ? '' : (i.kind === 'task' ? `<button class="icon-btn sm" data-start="${i.id}" aria-label="Başlat">${icon('play')}</button>` : `<button class="icon-btn sm" data-rdone="${i.id}" data-slot="${i.slot || 0}" aria-label="Tamamla">✓</button>`)}</span></div>`;
+  const clash = P.conflicts(items), slices = daySeq(now);
+  const stepRows = slices.flatMap((sl) => sl.rows.filter((r) => r.kind === 'step'));
+  const all = [...items.map((i) => ({ start: i.start, end: i.end, title: i.title, done: i.done })), ...stepRows.map((r) => ({ start: r.start, end: r.end, title: r.task.title, done: false }))].sort((a, b) => a.start - b.start);
+  const next = isToday ? all.find((i) => !i.done && i.end > now) : null;
+  const centre = !all.length ? ['Boş', 'plan yok'] : next ? [fmtTime(next.start), esc(next.title)] : [`${items.filter((i) => i.done).length}/${items.length}`, 'tamamlandı'];
   const [ws, we] = periodRange('week', dayAnchor);
   return `${liveBar(now)}${isToday ? deerCard(now) : ''}
     <div class="period-nav"><button class="icon-btn sm" id="planPrev" aria-label="Önceki hafta">${icon('back')}</button><div><b>${fmtLongDate(dayAnchor)}</b><small>${isToday ? 'Bugün' : weekTitle(ws, we)}</small></div><button class="icon-btn sm" id="planNext" aria-label="Sonraki hafta">${icon('next')}</button></div>
@@ -364,20 +396,41 @@ function dayView(now) {
     ${clash.length ? `<p class="warn">Aynı saate denk gelen ${clash.length} çift var: ${clash.slice(0, 2).map(([a, b]) => `“${esc(a.title)}” ile “${esc(b.title)}”`).join(', ')}. Birlikte yapılabiliyorsa görevi “aynı anda yapılabilir” olarak işaretle.</p>` : ''}
     <section class="card"><div class="dial-wrap plan-dial"><svg id="planDial" class="dial" role="img" aria-label="Günün 24 saatlik planı"></svg>
       <div class="dial-center"><strong>${centre[0]}</strong><small>${centre[1]}</small></div></div>
-      <p class="card-note">Dış halka plan, iç ince halka ölçülen zaman. Görevi ⠿ tutamağından sürükleyip saatin üstüne bırak.</p></section>
-    <section class="block"><div class="block-head"><h2>${isToday ? 'Bugün için seçilenler' : 'Bu gün için seçilenler'}</h2></div>
-      ${tray.length ? `<div class="tray">${tray.map((t) => `<span class="drag-chip" data-drag="${t.id}" style="--c:${projColor(t.projectId)}"><span class="grip" aria-hidden="true">⠿</span><button data-task="${t.id}">${esc(t.title)}${t.estimateMin ? ` · ${t.estimateMin} dk` : ''}</button><button class="mini" data-start="${t.id}" aria-label="Başlat">${icon('play')}</button><button class="mini" data-unpick="${t.id}" aria-label="Günden çıkar">×</button></span>`).join('')}</div><p class="hint left">Saat vermek için saatin üstüne sürükle; saat vermeden de başlatabilirsin.</p>`
-      : '<p class="empty-note">Saat bekleyen seçili görev yok.</p>'}</section>
-    ${items.some((i) => !i.done) ? `<section class="block"><div class="block-head"><h2>Saatli olanlar</h2>${items.some((i) => i.done) ? `<span class="chip quiet">${items.filter((i) => i.done).length} bitti</span>` : ''}</div><div class="flow day-list">${items.filter((i) => !i.done).map(row).join('')}</div></section>` : ''}
+      <p class="card-note">Dış halka plan (soluk olanlar sıradan hesaplanan saatler), iç ince halka ölçülen zaman.</p></section>
+    <section class="block"><div class="block-head"><h2>Sıra</h2></div>
+      ${stepRows.length || items.length ? `<div class="seq">${seqHtml(slices, iso, isToday, now)}</div>
+        <p class="hint left">Sırayı ↑↓ ile değiştir; saatler senin ölçtüğün sürelerden hesaplanır. Saati önemli olanı 📌 ile o saate sabitle (🔒 olur), 🔓 ile sıraya geri al.</p>`
+      : '<p class="empty-note">Bu gün için seçilmiş iş yok. Aşağıdan “Bugün”e dokununca sıraya girer.</p>'}</section>
     <section class="block"><div class="block-head"><h2>Saati olmayan görevler</h2></div>${unplannedHtml(isToday ? 'Bugün' : 'Bu güne')}
-      <p class="hint left">⠿ tutamağından saat kadranına ya da bir güne sürükle.</p></section>`;
+      <p class="hint left">“Bugün”e dokun ya da ⠿ tutamağından saat kadranına veya bir güne sürükle.</p></section>`;
 }
 
 function bindDay(root) {
   const now = Date.now(), range = dayRange(dayAnchor);
   const items = dayItems().map((i) => ({ ...i, color: i.kind === 'routine' ? 'var(--accent-2)' : projColor(i.projectId), label: `${esc(i.title)} ${fmtTime(i.start)}–${fmtTime(i.end)}` }));
   const actual = store.state.sessions.flatMap((s) => clipAll(sessionActive(s, now), range).map((iv) => ({ iv, color: catColor(s.category) })));
-  renderPlanDial($('#planDial', root), items, actual, range, now);
+  const slices = daySeq(now), iso = isoDate(dayAnchor);
+  const ghosts = slices.flatMap((sl) => sl.rows.filter((r) => r.kind === 'step')).map((r) => ({ kind: 'task', id: r.task.id, start: r.start, end: r.end, col: 0, cols: 1, color: `color-mix(in srgb, ${projColor(r.task.projectId)} 40%, transparent)`, label: `${esc(r.task.title)} ≈${fmtTime(r.start)}` }));
+  renderPlanDial($('#planDial', root), [...items, ...ghosts], actual, range, now);
+  const order = (id, dir) => { haptic(); act(store.setDayOrder(Q.moveStep(slices, id, dir))); };
+  $$('[data-up]', root).forEach((b) => { b.onclick = () => order(b.dataset.up, -1); });
+  $$('[data-down]', root).forEach((b) => { b.onclick = () => order(b.dataset.down, 1); });
+  $$('[data-pin]', root).forEach((b) => { b.onclick = () => { haptic(); const at = Number(b.dataset.at), r = Math.round(at / (5 * MIN)) * 5 * MIN; act(store.updateTask(b.dataset.pin, { scheduledAt: r }).then(() => toast(`${fmtTime(r)}’e sabitlendi`))); }; });
+  $$('[data-unpin]', root).forEach((b) => { b.onclick = () => { haptic(); const t = store.getTask(b.dataset.unpin); act(store.updateTask(t.id, { scheduledAt: null, plannedDay: iso, slice: Q.sliceAt(t.scheduledAt) }).then(() => toast('Sıraya alındı'))); }; });
+  $$('[data-stop]', root).forEach((b) => { b.onclick = () => stopTask(b.dataset.stop); });
+  const overRows = (id) => slices.find((x) => x.id === id).rows.filter((r) => r.kind === 'step' && r.overflow);
+  $$('[data-ovnext]', root).forEach((b) => { b.onclick = () => {
+    const ix = Q.SLICES.findIndex((x) => x.id === b.dataset.ovnext), to = Q.SLICES[ix + 1].id, moving = new Set(overRows(b.dataset.ovnext).map((r) => r.task.id));
+    const flat = slices.flatMap((sl) => sl.rows.filter((r) => r.kind === 'step').map((r) => ({ id: r.task.id, slice: moving.has(r.task.id) ? to : sl.id })));
+    // The moved steps go first in the next slice, keeping their order.
+    flat.sort((a, c) => Q.SLICES.findIndex((x) => x.id === a.slice) - Q.SLICES.findIndex((x) => x.id === c.slice) || (moving.has(c.id) - moving.has(a.id)));
+    act(store.setDayOrder(flat));
+  }; });
+  $$('[data-ovtom]', root).forEach((b) => { b.onclick = () => {
+    const d = new Date(dayAnchor); d.setDate(d.getDate() + 1);
+    act(Promise.all(overRows(b.dataset.ovtom).map((r) => store.updateTask(r.task.id, { plannedDay: isoDate(d.getTime()), slice: null, seq: null }))).then(() => toast('Yarına taşındı')));
+  }; });
+  $$('[data-ovkeep]', root).forEach((b) => { b.onclick = () => { skipOverflow.add(`${iso}|${b.dataset.ovkeep}`); renderPlan(); }; });
   const shift = (n) => { const d = new Date(dayAnchor); d.setDate(d.getDate() + 7 * n); dayAnchor = d.getTime(); renderPlan(); };
   $('#planPrev', root).onclick = () => shift(-1);
   $('#planNext', root).onclick = () => shift(1);

@@ -327,6 +327,20 @@ export function updateTask(id, patch) {
   return write(db.put('tasks', t));
 }
 
+/** Save the order of a day's row: [{ id, slice }] → seq and slice of each step. */
+export function setDayOrder(list) {
+  const out = [];
+  list.forEach((x, i) => {
+    const cur = getTask(x.id);
+    if (!cur || (cur.seq === i && cur.slice === x.slice)) return;
+    const t = planner.editTask(cur, { seq: i, slice: x.slice }, state.tasks);
+    putIn(state.tasks, t); out.push(t);
+  });
+  if (!out.length) return Promise.resolve();
+  emit('plan');
+  return write(db.batch(out.map((t) => ({ store: 'tasks', put: t }))));
+}
+
 /** Tick a step. Ticking a parent ticks every step under it. Returns what this unlocked. */
 export function setTaskDone(id, done) {
   const cur = getTask(id);

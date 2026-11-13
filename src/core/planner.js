@@ -53,6 +53,8 @@ export function editTask(task, patch, tasks, now = Date.now()) {
     next.scheduledAt = Number.isFinite(patch.scheduledAt) ? patch.scheduledAt : null;
     if (next.scheduledAt != null) next.plannedDay = isoDate(next.scheduledAt);
   }
+  if ('slice' in patch) next.slice = ['morning', 'noon', 'evening', 'night'].includes(patch.slice) ? patch.slice : null;
+  if ('seq' in patch) next.seq = Number.isFinite(patch.seq) ? patch.seq : null;
   if ('parallel' in patch) next.parallel = !!patch.parallel;
   if ('dependsOn' in patch) {
     const dep = patch.dependsOn || null;

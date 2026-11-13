@@ -350,3 +350,33 @@
 .cb-mini b{color:var(--accent-ink);font-variant-numeric:tabular-nums}
 .cb-mini.broken b{color:#b55a52}
 .cb-title small{font-size:var(--fs-xs)}
+
+/* ── day in order: slices ─────────────────────────────────── */
+.seq{display:grid;gap:var(--s3)}
+.seq-slice{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s2) var(--s3) var(--s3);box-shadow:var(--shadow-sm)}
+.seq-slice.now{border-color:var(--accent)}
+.seq-h{display:flex;align-items:baseline;gap:8px;padding:4px 0 6px}
+.seq-h b{font-size:var(--fs-md);font-weight:600}
+.seq-h small{color:var(--ink-soft);font-size:var(--fs-xs)}
+.seq-h .grow-r{margin-left:auto}
+.seq-slice.now .seq-h b::after{content:' · şimdi';font-weight:400;color:var(--accent-ink);font-size:var(--fs-xs)}
+.seq-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line-soft)}
+.seq-row:first-of-type{border-top:0}
+.seq-row::before{content:'';width:3px;align-self:stretch;border-radius:3px;background:var(--c)}
+.seq-t{flex:none;width:58px;display:flex;flex-direction:column;font-size:var(--fs-sm);font-variant-numeric:tabular-nums;color:var(--ink)}
+.seq-t small{font-size:10.5px;color:var(--ink-soft)}
+.seq-row .grow{flex:1;min-width:0;text-align:left}
+.seq-row .grow b{display:block;font-size:var(--fs-sm);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.seq-row .grow small{font-size:var(--fs-xs);color:var(--ink-soft)}
+.seq-acts{display:flex;gap:2px;flex:none}
+.seq-acts .mini-btn{width:30px;height:30px}
+.seq-row.fixed .seq-t{color:var(--accent-ink)}
+.seq-row.run .seq-t{color:var(--accent-ink);font-weight:600}
+.seq-row.over .seq-t,.seq-row.over .grow small{color:#b55a52}
+.seq-row.done{opacity:.5}
+.seq-empty{margin:4px 0 0;font-size:var(--fs-xs);color:var(--ink-faint)}
+.seq-ask{margin-top:var(--s2);padding:10px 12px;border-radius:var(--r-md);background:#fbeeed}
+.seq-ask p{margin:0 0 6px;font-size:var(--fs-sm);color:#8d4740}
+.seq-row .grip{flex:none;width:14px;color:var(--ink-faint);font-size:13px;touch-action:none;cursor:grab}
+.seq-row .grip.off{visibility:hidden}
+.seq-row::before{order:-1}
