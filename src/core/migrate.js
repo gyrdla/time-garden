@@ -106,7 +106,7 @@ export function normalizeImport(raw) {
     assets: (raw.assets || []).filter((a) => a && typeof a.id === 'string' && ['sticker', 'washi', 'cover'].includes(a.kind) && /^data:image\//.test(a.dataUrl || '')),
     cards: (raw.cards || []).filter((c) => c && typeof c.id === 'string' && ['idea', 'inspire', 'tuto'].includes(c.kind) && (!c.url || /^https?:\/\//.test(c.url))),
     combos: (raw.combos || []).filter((c) => c && typeof c.id === 'string' && Array.isArray(c.steps) && c.steps.length >= 2 && c.steps.every((x) => x && ['task', 'habit'].includes(x.kind) && typeof x.ref === 'string'))
-      .map((c) => ({ ...c, title: String(c.title || 'Combo'), repeat: !!c.repeat, runStart: /^\d{4}-\d{2}-\d{2}$/.test(c.runStart || '') ? c.runStart : new Date().toISOString().slice(0, 10), runs: Array.isArray(c.runs) ? c.runs.filter((r) => r && Number.isFinite(r.n)) : [] })),
+      .map((c) => ({ ...c, title: String(c.title || 'Combo'), repeat: !!c.repeat, windowMin: Number.isFinite(c.windowMin) && c.windowMin > 0 ? c.windowMin : null, runStart: /^\d{4}-\d{2}-\d{2}$/.test(c.runStart || '') ? c.runStart : new Date().toISOString().slice(0, 10), runs: Array.isArray(c.runs) ? c.runs.filter((r) => r && Number.isFinite(r.n)) : [] })),
     routineLog: (raw.routineLog || []).filter((l) => l && typeof l.id === 'string' && typeof l.routineId === 'string'),
     settings: raw.settings && typeof raw.settings === 'object' ? raw.settings : {},
   };

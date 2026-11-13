@@ -4,7 +4,7 @@ import { $, $$, esc, icon, toast, haptic } from './dom.js';
 import * as store from '../core/store.js';
 import * as K from '../core/combos.js';
 import { routineTimes } from '../core/planner.js';
-import { isoDate, fromIso } from '../core/time.js';
+import { isoDate, fromIso, fmtTime } from '../core/time.js';
 import { ValidationError } from '../core/tracker.js';
 import { openSheet, closeSheet, run } from './sheets.js';
 import { openTask, startTask, stopTask, runningOf, toggleTask } from './plan.js';
@@ -21,6 +21,11 @@ function dayWord(iso) {
   if (d === -1) return 'dün';
   return new Date(fromIso(iso) + 43_200_000).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
 }
+
+const fmtWin = (m) => (m % 60 ? (m >= 60 ? `${Math.floor(m / 60)} sa ${m % 60} dk` : `${m} dk`) : `${m / 60} saat`);
+const WINDOWS = [[null, 'Süresiz'], [30, '30 dk'], [60, '1 saat'], [90, '1,5 saat'], [120, '2 saat'], [180, '3 saat'], [360, '6 saat'], [720, '12 saat'], [1440, '1 gün']];
+const FOLD = 'tg.comboFold';
+const folded = () => { try { return localStorage.getItem(FOLD) === '1'; } catch { return false; } };
 
 const stepName = (x) => x.missing ? 'silinmiş adım' : x.title;
 const stepTag = (x) => x.habit ? '↻' : '';
@@ -57,15 +62,17 @@ function comboHtml(c) {
     line = `Tamamlandı · ${pr.count} adım art arda`;
     if (c.repeat) btn = `<button type="button" class="chip" data-crestart="${c.id}">↻ Yeni tur</button>`;
   } else if (pr.status === 'broken') {
-    line = `Kırıldı: “${esc(stepName(cur))}” ${dayWord(cur.due)} yapılacaktı`;
+    line = c.windowMin ? `Süre doldu: ${fmtWin(c.windowMin)} içinde bitmeliydi` : `Kırıldı: “${esc(stepName(cur))}” ${dayWord(cur.due)} yapılacaktı`;
     btn = `<button type="button" class="chip" data-crestart="${c.id}">Baştan başla</button>`;
   } else if (cur) {
-    line = `Sırada: <b>${esc(stepName(cur))}</b>${cur.due ? ` · ${dayWord(cur.due)}` : (cur.queued ? ' · alışkanlık sırada bekliyor' : ' · gün seçilmedi')}`;
+    const when = c.windowMin ? (pr.endsAt ? ` · ⏳ ${fmtTime(pr.endsAt)}’e kadar` : ` · ilk adımla ${fmtWin(c.windowMin)} başlar`)
+      : (cur.due ? ` · ${dayWord(cur.due)}` : (cur.queued ? ' · alışkanlık sırada bekliyor' : ' · gün seçilmedi'));
+    line = `Sırada: <b>${esc(stepName(cur))}</b>${when}`;
     btn = cur.habit ? `<button type="button" class="chip" data-cdo="${c.id}">✓ Bugün yaptım</button>`
       : (cur.missing ? '' : `<button type="button" class="chip" data-cdo="${c.id}">${runningOf(cur.step.ref) ? '■ Bitir' : '▶ Başlat'}</button><button type="button" class="chip" data-cdone="${c.id}">✓ Bitti</button>`);
   }
   return `<div class="combo ${pr.status}" data-combo="${c.id}">
-    <div class="cb-head"><button type="button" class="cb-title" data-cedit="${c.id}">${esc(c.title)}${c.repeat ? ' <small>↻</small>' : ''}</button>
+    <div class="cb-head"><button type="button" class="cb-title" data-cedit="${c.id}">${esc(c.title)}${c.repeat ? ' <small>↻</small>' : ''}${c.windowMin ? ` <small>⏳ ${fmtWin(c.windowMin)}</small>` : ''}</button>
       <span class="cb-x${pr.count ? ' hot' : ''}" aria-label="Combo ${pr.count}">×${pr.count}</span></div>
     ${snakeHtml(cards)}
     <div class="cb-foot"><span>${line}</span>${btn}</div></div>`;
@@ -74,12 +81,14 @@ function comboHtml(c) {
 export function renderCombos() {
   const el = $('#comboCard');
   if (!el) return;
-  const list = store.state.combos;
-  const n = suggestions().length;
+  const list = store.state.combos, n = suggestions().length, fold = folded();
   const shown = [...list].sort((a, b) => rank(a) - rank(b));
-  el.innerHTML = `<div class="block-head"><h2>Combo</h2><span class="grow"></span>
-    ${n ? `<button class="chip quiet" id="comboIdeas">✨ ${n} öneri</button>` : ''}<button class="btn ghost sm" id="comboNew">＋ Combo kur</button></div>
-    ${shown.length ? shown.map(comboHtml).join('') : '<p class="empty-note">Alışkanlık kazanmak için birbirini çeken işleri sıraya diz (akşam duş + saç → sabah makyaj → çekim…). Art arda yaptıkça sayaç artar, günü kaçarsa kırılır.</p>'}`;
+  const mini = (c) => { const pr = store.comboProgress(c); return `<button type="button" class="cb-mini ${pr.status}" data-cedit="${c.id}"><span>${esc(c.title)}</span><b>×${pr.count}</b></button>`; };
+  el.innerHTML = `<div class="block-head"><button type="button" class="fold-h" id="comboFold" aria-expanded="${!fold}"><h2>Combo</h2><span class="fold-i">${fold ? '▸' : '▾'}</span></button><span class="grow"></span>
+    ${n && !fold ? `<button class="chip quiet" id="comboIdeas">✨ ${n} öneri</button>` : ''}<button class="btn ghost sm" id="comboNew">＋ Combo kur</button></div>
+    ${fold ? (shown.length ? `<div class="cb-minis">${shown.map(mini).join('')}</div>` : '')
+      : shown.length ? shown.map(comboHtml).join('') : '<p class="empty-note">Alışkanlık kazanmak için birbirini çeken işleri sıraya diz (akşam duş + saç → sabah makyaj → çekim…). Art arda yaptıkça sayaç artar; süre verirsen o süre içinde bitirmen gerekir.</p>'}`;
+  $('#comboFold', el).onclick = () => { try { localStorage.setItem(FOLD, fold ? '0' : '1'); } catch { /* private mode */ } renderCombos(); };
   bind(el);
 }
 
@@ -154,11 +163,13 @@ function draftWhere(s) {
 }
 
 export function openBuilder(combo = null, preset = null) {
-  const draft = preset ? { ...preset, steps: [...preset.steps] } : combo ? { title: combo.title, repeat: combo.repeat, steps: [...combo.steps] } : { title: '', repeat: false, steps: [] };
+  const draft = preset ? { ...preset, steps: [...preset.steps] } : combo ? { title: combo.title, repeat: combo.repeat, windowMin: combo.windowMin ?? null, steps: [...combo.steps] } : { title: '', repeat: false, windowMin: null, steps: [] };
   const lifeId = store.lifeProject()?.id || '__life';
   openSheet(combo ? 'Combo' : 'Combo kur', `<form id="cf" class="combo-form">
     <input class="ts-title" name="title" maxlength="80" placeholder="Combo adı (örn. Hazırlık)" value="${esc(draft.title)}" autocomplete="off" aria-label="Combo adı">
     <label class="check"><input type="checkbox" name="repeat"${draft.repeat ? ' checked' : ''}>Tekrarlanan combo (bitince yeni tur açılır)</label>
+    <div class="field"><span>Ne kadar sürede bitmeli?</span><div class="chips" id="cbWin">${WINDOWS.map(([v, l]) => `<button type="button" class="chip${(draft.windowMin ?? null) === v ? ' chosen' : ''}" data-w="${v ?? ''}">${l}</button>`).join('')}</div>
+      <small class="hint" style="text-align:left">Süre ilk adımı bitirdiğinde başlar; süre dolmadan hepsini art arda bitirmelisin.</small></div>
     <ol class="cb-draft" id="cbDraft"></ol>
     <div class="field"><span>Var olan bir adım ekle</span><select id="cbPick">${pickerHtml()}</select></div>
     <div class="field"><span>ya da yeni adım yaz</span><div class="cb-new"><input id="cbNewTitle" maxlength="160" placeholder="Örn. Kombin çekimi" autocomplete="off" enterkeyhint="done">
@@ -176,6 +187,7 @@ export function openBuilder(combo = null, preset = null) {
     $$('[data-rm]', b).forEach((x) => { x.onclick = () => { draft.steps.splice(Number(x.dataset.rm), 1); draw(); }; });
   };
   draw();
+  $$('#cbWin [data-w]', b).forEach((x) => { x.onclick = () => { draft.windowMin = x.dataset.w ? Number(x.dataset.w) : null; $$('#cbWin .chip', b).forEach((c) => c.classList.toggle('chosen', c === x)); }; });
   $('#cbPick', b).onchange = (e) => {
     const [kind, ref] = e.target.value.split('|');
     if (kind && !draft.steps.some((s) => s.kind === kind && s.ref === ref)) draft.steps.push({ kind, ref });
@@ -192,7 +204,7 @@ export function openBuilder(combo = null, preset = null) {
   if (combo) $('#cbDel', b).onclick = () => { if (confirm(`“${combo.title}” silinsin mi? Adımlar projelerinde kalır.`)) run(() => store.removeCombo(combo.id), 'Silindi'); };
   f.onsubmit = (e) => {
     e.preventDefault();
-    const input = { title: f.title.value, repeat: f.repeat.checked };
+    const input = { title: f.title.value, repeat: f.repeat.checked, windowMin: draft.windowMin };
     run(async () => {
       if (draft.steps.length < 2) throw new ValidationError('Bir combo en az iki adımdan oluşur.');
       const steps = [];

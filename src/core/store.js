@@ -587,7 +587,7 @@ export function updateCombo(id, patch) {
   if (!cur) return Promise.resolve();
   const steps = patch.steps ?? cur.steps;
   if (steps.length < 2) return Promise.reject(new tracker.ValidationError('Bir combo en az iki adımdan oluşur.'));
-  const c = { ...cur, ...('title' in patch ? { title: String(patch.title || '').trim().slice(0, 80) || 'Combo' } : {}), ...('repeat' in patch ? { repeat: !!patch.repeat } : {}), steps, updatedAt: Date.now() };
+  const c = { ...cur, ...('title' in patch ? { title: String(patch.title || '').trim().slice(0, 80) || 'Combo' } : {}), ...('repeat' in patch ? { repeat: !!patch.repeat } : {}), ...('windowMin' in patch ? { windowMin: combosLib.windowOf(patch.windowMin) } : {}), steps, updatedAt: Date.now() };
   putIn(state.combos, c);
   emit('plan');
   return write(db.put('combos', c)).then(() => c);

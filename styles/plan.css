@@ -343,3 +343,10 @@
 .ch-branch-pick{display:grid;gap:6px;font-size:var(--fs-xs);color:var(--ink-soft)}
 .ch-exist summary{font-size:var(--fs-sm);color:var(--ink-soft);padding:6px 0}
 .ch-exist-h{font-size:var(--fs-xs);color:var(--ink-soft);margin:var(--s2) 0 4px;text-transform:uppercase;letter-spacing:.05em}
+.fold-h{display:flex;align-items:center;gap:6px;min-height:44px;text-align:left;color:inherit}
+.fold-i{color:var(--ink-soft);font-size:14px}
+.cb-minis{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:var(--s3)}
+.cb-mini{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border-radius:var(--r-pill);background:var(--surface);border:1px solid var(--line);font-size:var(--fs-sm)}
+.cb-mini b{color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.cb-mini.broken b{color:#b55a52}
+.cb-title small{font-size:var(--fs-xs)}

@@ -240,3 +240,11 @@ test('estimates: same work measured → its median; otherwise the user\'s pace; 
   const L = P.todayLoad([t1, t2, t3, later, pick], [], [], [], sessions, [], at(14));
   assert.deepEqual([L.count, Math.round(L.ms / 60000), L.guessed, L.next.title, L.picked, Math.round(L.leftMs / 3600000)], [2, 90, 0, 'Yeni kurgu', 1, 10]);
 });
+
+test('moving a timed step to another day keeps its hour on the new day', async () => {
+  const P = await import('../src/core/planner.js');
+  const t = P.newTask({ projectId: 'p', title: 'x', scheduledAt: new Date(2026, 10, 12, 22, 30).getTime() });
+  const n = P.editTask(t, { plannedDay: '2026-11-13' }, [t]);
+  assert.equal(n.plannedDay, '2026-11-13');
+  assert.equal(n.scheduledAt, new Date(2026, 10, 13, 22, 30).getTime());
+});

@@ -8,7 +8,7 @@
 //            estimateMin, parallel, active, createdAt }
 // RoutineLog { id:`${routineId}|${isoDate}`, routineId, date, doneAt }
 
-import { sessionActive, eventInterval, total, union, isoDate, dayRange, MIN, DAY } from './time.js';
+import { sessionActive, eventInterval, total, union, isoDate, fromIso, dayRange, MIN, DAY } from './time.js';
 import { peakWindow } from './analytics.js';
 import { uid, ValidationError, CATEGORIES } from './tracker.js';
 
@@ -42,6 +42,13 @@ export function editTask(task, patch, tasks, now = Date.now()) {
   if ('cardIds' in patch) next.cardIds = [...new Set((patch.cardIds || []).filter((x) => typeof x === 'string' && x))];
   if ('estimateMin' in patch) next.estimateMin = minutes(patch.estimateMin);
   if ('plannedDay' in patch) next.plannedDay = /^\d{4}-\d{2}-\d{2}$/.test(patch.plannedDay || '') ? patch.plannedDay : null;
+  // Moving a step to another day keeps its clock time but on the new day, so it shows there.
+  if ('plannedDay' in patch && !('scheduledAt' in patch) && next.scheduledAt != null && next.plannedDay && isoDate(next.scheduledAt) !== next.plannedDay) {
+    const old = new Date(next.scheduledAt), d = new Date(fromIso(next.plannedDay));
+    d.setHours(old.getHours(), old.getMinutes(), 0, 0);
+    next.scheduledAt = d.getTime();
+  }
+  if ('plannedDay' in patch && !next.plannedDay) next.scheduledAt = 'scheduledAt' in patch && Number.isFinite(patch.scheduledAt) ? patch.scheduledAt : null;
   if ('scheduledAt' in patch) {
     next.scheduledAt = Number.isFinite(patch.scheduledAt) ? patch.scheduledAt : null;
     if (next.scheduledAt != null) next.plannedDay = isoDate(next.scheduledAt);

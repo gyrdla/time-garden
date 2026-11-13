@@ -4,9 +4,9 @@
 // Combo { id, title, repeat, steps:[{ kind:'task'|'habit', ref }], runStart:'YYYY-MM-DD',
 //         runs:[{ at, n }], createdAt, updatedAt }
 //
-// The counter grows with every step done in order. It breaks (rule chosen by the user) when
-// the next step's planned day has passed without it being done; a step done after its day
-// restarts the count from that step.
+// The counter grows with every step done in order. With a time limit the whole combo must be
+// done within it, counted from the first step; otherwise it breaks when the next step's planned
+// day has passed. A step done too late restarts the count from that step.
 
 import { uid, ValidationError } from './tracker.js';
 import { isoDate, fromIso, DAY } from './time.js';
@@ -14,11 +14,17 @@ import { routineTimes } from './planner.js';
 
 const norm = (s) => String(s || '').trim().toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ');
 
-export function newCombo({ title, repeat = false, steps = [] }, now = Date.now()) {
+export function newCombo({ title, repeat = false, steps = [], windowMin = null }, now = Date.now()) {
   const st = (steps || []).filter((x) => x && ['task', 'habit'].includes(x.kind) && typeof x.ref === 'string');
   if (st.length < 2) throw new ValidationError('Bir combo en az iki adımdan oluşur.');
   const t = String(title || '').trim().slice(0, 80);
-  return { id: uid(), title: t || 'Combo', repeat: !!repeat, steps: st, runStart: isoDate(now), runs: [], createdAt: now, updatedAt: now };
+  return { id: uid(), title: t || 'Combo', repeat: !!repeat, steps: st, windowMin: windowOf(windowMin), runStart: isoDate(now), runs: [], createdAt: now, updatedAt: now };
+}
+
+/** A time limit for the whole combo, in minutes (null: no limit, the planned days decide). */
+export function windowOf(v) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 7 * 24 * 60) : null;
 }
 
 /** The first day on or after `fromIso` on which a habit is planned. */
@@ -66,22 +72,25 @@ function stepInfo(combo, { tasks, routines, routineLog }) {
  * next    index of the step to do next (or -1 when done)
  */
 export function comboProgress(combo, ctx, now = Date.now()) {
-  const today = isoDate(now), info = stepInfo(combo, ctx);
-  let count = 0, best = 0, status = 'running', next = -1;
+  const today = isoDate(now), info = stepInfo(combo, ctx), win = combo.windowMin ? combo.windowMin * 60_000 : null;
+  let count = 0, best = 0, status = 'running', next = -1, since = null;
   for (let i = 0; i < info.length; i++) {
     const x = info[i];
     if (x.doneAt) {
-      const late = x.due && isoDate(x.doneAt) > x.due;
+      // With a time limit the clock starts at the first step; a step done too late starts it again.
+      const late = win ? (since != null && x.doneAt - since > win) : (x.due && isoDate(x.doneAt) > x.due);
+      if (late || since == null) since = x.doneAt;
       count = late ? 1 : count + 1;
       best = Math.max(best, count);
       continue;
     }
     next = i;
-    if (x.due && x.due < today) { status = 'broken'; count = 0; }
+    if (win ? (since != null && now - since > win) : (x.due && x.due < today)) { status = 'broken'; count = 0; }
     break;
   }
   if (next === -1) status = 'done';
-  return { info, count, best, status, next, total: info.length };
+  const endsAt = win && since != null && status === 'running' ? since + win : null;
+  return { info, count, best, status, next, total: info.length, endsAt };
 }
 
 /** Food the deer got from finished combo runs: one per step of each finished run. */

@@ -64,3 +64,20 @@ test('after starting again, a day planned before the new run does not break it',
   assert.equal(K.comboProgress(c, { tasks: [a, b], routines: [], routineLog: [] }, at(15)).status, 'running');
   assert.equal(K.comboProgress(c, { tasks: [{ ...a, done: true, doneAt: at(15) }, b], routines: [], routineLog: [] }, at(15)).count, 1);
 });
+
+test('a combo with a time limit must be done within it, counted from the first step', () => {
+  const a = T(lab, 'Banyo'), b = T(lab, 'Saç kurut'), c = T(lab, 'Kremlen');
+  const k = K.newCombo({ title: 'Bakım', windowMin: 90, steps: [a, b, c].map((t) => ({ kind: 'task', ref: t.id })) }, at(13, 8));
+  assert.equal(k.windowMin, 90);
+  const ctx = (...done) => ({ tasks: [a, b, c].map((t, i) => (done[i] ? { ...t, done: true, doneAt: done[i] } : t)), routines: [], routineLog: [] });
+  let pr = K.comboProgress(k, ctx(), at(20));
+  assert.deepEqual([pr.status, pr.count, pr.endsAt], ['running', 0, null]);                 // the clock has not started
+  pr = K.comboProgress(k, ctx(at(13, 20)), at(13, 21));
+  assert.deepEqual([pr.status, pr.count, pr.endsAt], ['running', 1, at(13, 21, 30)]);
+  pr = K.comboProgress(k, ctx(at(13, 20), at(13, 21)), at(13, 22));
+  assert.deepEqual([pr.status, pr.count], ['broken', 0]);                                   // 2 h after the first step
+  pr = K.comboProgress(k, ctx(at(13, 20), at(13, 21), at(13, 21, 20)), at(13, 22));
+  assert.deepEqual([pr.status, pr.count], ['done', 3]);
+  pr = K.comboProgress(k, ctx(at(13, 20), at(13, 23), at(13, 23, 10)), at(14));
+  assert.deepEqual([pr.status, pr.count], ['done', 2]);                                     // the late step restarted the clock
+});

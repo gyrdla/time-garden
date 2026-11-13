@@ -745,6 +745,8 @@ export function openTask(id) {
     b.onclick = () => {
       f.day.value = b.dataset.pick;
       if (!b.dataset.pick) { f.when.value = ''; return; }
+      // A step with an hour moves to the picked day at the same hour.
+      if (f.when.value) f.when.value = `${b.dataset.pick}T${f.when.value.slice(11, 16)}`;
       // Quick picks save right away: one tap, done.
       run(() => store.updateTask(t.id, patch()), b.dataset.pick === todayIso() ? 'Bugün için seçildi' : 'Yarına eklendi');
     };
