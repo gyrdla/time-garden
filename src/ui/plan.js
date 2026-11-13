@@ -361,7 +361,7 @@ function seqHtml(slices, iso, isToday, now) {
   const step = (r) => `<div class="seq-row${r.running ? ' run' : ''}${r.overflow ? ' over' : ''}" data-seq="${r.task.id}" data-drag="${r.task.id}" style="--c:${projColor(r.task.projectId)}"><span class="grip" aria-label="Sürükle">⠿</span>
       <span class="seq-t">${r.running ? '● şimdi' : `≈${fmtTime(r.start)}`}<small>${r.minutes} dk${r.guessed ? '?' : ''}</small></span>
       <button class="grow" data-task="${r.task.id}"><b>${esc(r.task.title)}</b><small>${esc(projName(r.task.projectId))}${r.overflow ? ' · sığmıyor' : ''}</small></button>
-      <span class="seq-acts"><button class="mini-btn" data-up="${r.task.id}" aria-label="Yukarı">↑</button><button class="mini-btn" data-down="${r.task.id}" aria-label="Aşağı">↓</button>
+      <span class="seq-acts"><span class="seq-ud"><button class="mini-btn" data-up="${r.task.id}" aria-label="Yukarı">↑</button><button class="mini-btn" data-down="${r.task.id}" aria-label="Aşağı">↓</button></span>
       <button class="mini-btn" data-pin="${r.task.id}" data-at="${r.start}" aria-label="Bu saate sabitle">📌</button>
       ${r.running ? `<button class="mini-btn" data-stop="${r.task.id}" aria-label="Bitir">${icon('stop')}</button>` : `<button class="mini-btn" data-start="${r.task.id}" aria-label="Başlat">${icon('play')}</button>`}</span></div>`;
   const fixed = (r) => { const i = r.item;
